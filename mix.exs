@@ -52,13 +52,17 @@ defmodule ArkePostgres.MixProject do
   defp description() do
     "Arke postgres"
   end
+
   defp package() do
     [
       # This option is only needed when you don't want to use the OTP application name
       name: "arke_postgres",
       # These are the default files included in the package
       licenses: ["Apache-2.0"],
-      links: %{}
+      links: %{
+        "Website" => "https://arkehub.com",
+        "Github" => "https://github.com/arkemishub/arke-postgres"
+      }
     ]
   end
 end
