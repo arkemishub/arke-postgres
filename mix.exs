@@ -34,16 +34,8 @@ defmodule ArkePostgres.MixProject do
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.10", only: :test},
-      get_arke(Mix.env())
+      {:arke, "~> 0.1.3"}
     ])
-  end
-
-  defp get_arke(:dev) do
-    [{:arke, in_umbrella: true}]
-  end
-
-  defp get_arke(_env) do
-    [{:arke, "~> 0.1.3"}]
   end
 
   defp description() do
