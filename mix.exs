@@ -4,7 +4,7 @@ defmodule ArkePostgres.MixProject do
   def project do
     [
       app: :arke_postgres,
-      version: "0.1.3",
+      version: "0.1.4",
       build_path: "./_build",
       config_path: "./config/config.exs",
       deps_path: "./deps",
@@ -34,7 +34,7 @@ defmodule ArkePostgres.MixProject do
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.10", only: :test},
-      {:arke, "~> 0.1.3"}
+      {:arke, "~> 0.1.4"}
     ])
   end
 
