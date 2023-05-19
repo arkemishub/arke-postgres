@@ -4,7 +4,7 @@ defmodule ArkePostgres.MixProject do
   def project do
     [
       app: :arke_postgres,
-      version: "0.1.2",
+      version: "0.1.3",
       build_path: "./_build",
       config_path: "./config/config.exs",
       deps_path: "./deps",
@@ -35,9 +35,6 @@ defmodule ArkePostgres.MixProject do
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.10", only: :test},
       get_arke(Mix.env())
-
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"},
     ])
   end
 
@@ -46,7 +43,7 @@ defmodule ArkePostgres.MixProject do
   end
 
   defp get_arke(_env) do
-    [{:arke, "~> 0.1.2"}]
+    [{:arke, "~> 0.1.3"}]
   end
 
   defp description() do

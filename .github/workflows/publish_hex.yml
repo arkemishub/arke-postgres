@@ -12,6 +12,6 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Publish package to Hex 📦
-        uses: arkemishub/publish-to-hex@v1.13.4
+        uses: arkemishub/publish-to-hex@v0.0.1
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
