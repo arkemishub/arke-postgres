@@ -18,27 +18,45 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
   use Mix.Task
 
   @shortdoc "Init new arke postgres DB"
-  def run(_) do
-    Mix.Task.run("app.start")
+  def run(_args) do
+    case ArkePostgres.check_env() do
+     {:ok, _ } -> [:postgrex, :ecto_sql, :arke]
+    |> Enum.each(&Application.ensure_all_started/1)
 
+    ArkePostgres.Repo.start_link()
+
+    Mix.shell().info("---- Creating schema ----")
     ArkePostgres.create_project(%{arke_id: :arke_project, id: :arke_system})
+    Mix.shell().info("---- Schema created ----")
+    Mix.shell().info("---- Creating arke_system project ----")
     create_base_project()
+    Mix.shell().info("---- Project created ----")
+    Mix.shell().info("---- Creating default user ----")
     create_admin_user()
+    Mix.shell().info("---- User created ----")
+    :ok
+    {:error, keys} -> ArkePostgres.print_missing_env(keys)
+    end
   end
 
   defp create_base_project() do
     arke_project = ArkeManager.get(:arke_project, :arke_system)
+
     QueryManager.create(:arke_system, arke_project,
-      [
-        id: :arke_system,
-        label: "Arke system",
-        description: "Base project of the application",
-        type: "postgres_schema"
-      ]
+      id: :arke_system,
+      label: "Arke system",
+      description: "Base project of the application",
+      type: "postgres_schema"
     )
   end
+
   defp create_admin_user() do
     user_arke = ArkeManager.get(:user, :arke_system)
-    QueryManager.create(:arke_system, user_arke, %{username: "admin", password: "admin", type: "super_admin"})
+
+    QueryManager.create(:arke_system, user_arke, %{
+      username: "admin",
+      password: "admin",
+      type: "super_admin"
+    })
   end
 end

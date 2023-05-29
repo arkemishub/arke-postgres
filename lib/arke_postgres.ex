@@ -36,17 +36,20 @@ defmodule ArkePostgres do
         end
 
       {:error, keys} ->
-        for k <- keys do
-          IO.puts(
-            "#{IO.ANSI.red()} error:#{IO.ANSI.reset()} #{k} not found. Export it from your env file in order to start the application"
-          )
-        end
-
+        print_missing_env(keys)
         :error
     end
   end
 
-  defp check_env() do
+  def print_missing_env(keys) when is_list(keys) do
+    for k <- keys do
+      IO.puts("#{IO.ANSI.red()} error:#{IO.ANSI.reset()} env key #{k} not found.")
+    end
+  end
+
+  def print_missing_env(keys), do: print_missing_env([keys])
+
+  def check_env() do
     keys = ["DB_NAME", "DB_HOSTNAME", "DB_USER", "DB_PASSWORD"]
 
     key_map =
