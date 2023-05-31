@@ -21,7 +21,7 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
   def run(_args) do
     case ArkePostgres.check_env() do
       {:ok, _} ->
-        [:postgrex, :ecto_sql, :arke, :arke_auth]
+        [:postgrex, :ecto_sql, :arke_auth, :arke]
         |> Enum.each(&Application.ensure_all_started/1)
 
         ArkePostgres.Repo.start_link()
