@@ -18,9 +18,26 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
   use Mix.Task
 
   @shortdoc "Creates a new project"
+
+  @moduledoc """
+  Creates a new project in the database.
+
+  ## Examples
+
+      $ mix arke_postgres.create_project --id my_project
+      $ mix arke_postgres.create_project --id my_project --description "My project description"
+
+  ## Command line options
+
+  * `--id` - The id of the project to create
+  * `--label` - The label of the project to create
+  * `--description` - The description of the project to create
+  """
+
+  @impl true
   def run([]) do
     Mix.shell().error(
-      "Arguments are missing. Please provide an id for the project by passing --id=project_id"
+      "Project ID is missing. Please provide an id for the project by passing --id project_id"
     )
   end
 
@@ -31,8 +48,6 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
         |> Enum.each(&Application.ensure_all_started/1)
 
         ArkePostgres.Repo.start_link()
-
-        IO.inspect(parse_args(args))
 
         args |> parse_args() |> create_project()
         :ok
@@ -55,7 +70,7 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
 
   defp create_project(_) do
     Mix.shell().error(
-      "Project ID is missing. Please provide an id for the project by passing --id=project_id"
+      "Project ID is missing. Please provide an id for the project by passing --id project_id"
     )
   end
 
