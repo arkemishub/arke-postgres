@@ -21,20 +21,25 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
   def run(_args) do
     case ArkePostgres.check_env() do
       {:ok, _} ->
+        Mix.shell().info(" \e[34m ---- Creating database ---- \e[0m")
+        app = Mix.Project.config()[:app]
+        Application.put_env(app, :ecto_repos, [ArkePostgres.Repo])
+        Mix.Task.run("ecto.create")
+
         [:postgrex, :ecto_sql, :arke_auth, :arke]
         |> Enum.each(&Application.ensure_all_started/1)
 
         ArkePostgres.Repo.start_link()
 
-        Mix.shell().info("---- Creating schema ----")
+        Mix.shell().info("\e[34m ---- Creating schema ---- \e[0m")
         ArkePostgres.create_project(%{arke_id: :arke_project, id: :arke_system})
-        Mix.shell().info("---- Schema created ----")
-        Mix.shell().info("---- Creating arke_system project ----")
+        Mix.shell().info("\e[32m ---- Schema created ---- \e[0m")
+        Mix.shell().info("\e[34m ---- Creating arke_system project ---- \e[0m")
         create_base_project()
-        Mix.shell().info("---- Project created ----")
-        Mix.shell().info("---- Creating default user ----")
+        Mix.shell().info("\e[32m ---- Project created ---- \e[0m")
+        Mix.shell().info("\e[34m ---- Creating default user ---- \e[0m")
         create_admin_user()
-        Mix.shell().info("---- User created ----")
+        Mix.shell().info("\e[32m ---- User created ---- \e[0m")
         :ok
 
       {:error, keys} ->
