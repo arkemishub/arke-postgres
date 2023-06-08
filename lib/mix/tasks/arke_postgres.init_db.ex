@@ -53,7 +53,7 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
   def run(args) do
     {opts, _} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
 
-    case ArkePostgres.check_env() do
+    case ArkePostgres.check_env(:dev) do
       {:ok, _} ->
         [:postgrex, :ecto_sql, :arke_auth, :arke]
         |> Enum.each(&Application.ensure_all_started/1)
