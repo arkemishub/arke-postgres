@@ -69,6 +69,7 @@ defmodule ArkePostgres do
 
     arke = Arke.Boundary.ArkeManager.get(:arke, :arke_system)
     Enum.each(parameters, fn unit -> Arke.Boundary.ParameterManager.create(unit, project_id) end)
+    Enum.each(parameters, fn unit -> Arke.Boundary.ParamsManager.create(unit, project_id) end)
 
     Enum.each(arke_list, fn unit ->
       unit =
