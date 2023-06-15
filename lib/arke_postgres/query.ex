@@ -14,6 +14,7 @@
 
 defmodule ArkePostgres.Query do
   import Ecto.Query
+  alias Arke.DatetimeHandler, as: DatetimeHandler
 
   @record_fields [:id, :arke_id, :data, :metadata, :inserted_at, :updated_at]
 
@@ -368,8 +369,27 @@ defmodule ArkePostgres.Query do
   defp get_value(%{id: id, arke_id: :boolean} = _parameter, _),
     do: raise("Parameter(#{id}) value not valid")
 
-  defp get_value(%{id: id, arke_id: :datetime} = _parameter, value), do: value
-  defp get_value(%{id: id, arke_id: :time} = _parameter, value), do: value
+  defp get_value(%{id: id, arke_id: :datetime} = _parameter, value) do
+    case DatetimeHandler.parse_datetime(value) do
+      {:ok, parsed_datetime} -> parsed_datetime
+      {:error, _msg} -> raise("Parameter(#{id}) value not valid")
+    end
+  end
+
+  defp get_value(%{id: id, arke_id: :date} = _parameter, value) do
+    case DatetimeHandler.parse_date(value) do
+      {:ok, parsed_date} -> parsed_date
+      {:error, _msg} -> raise("Parameter(#{id}) value not valid")
+    end
+  end
+
+  defp get_value(%{id: id, arke_id: :time} = _parameter, value) do
+    case DatetimeHandler.parse_time(value) do
+      {:ok, parsed_time} -> parsed_time
+      {:error, _msg} -> raise("Parameter(#{id}) value not valid")
+    end
+  end
+
   defp get_value(%{id: id, arke_id: :dict} = _parameter, value), do: value
   defp get_value(%{id: id, arke_id: :list} = _parameter, value), do: value
   defp get_value(%{id: id}, value), do: raise("Parameter(#{id}) value not valid")
