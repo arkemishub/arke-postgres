@@ -402,16 +402,16 @@ defmodule ArkePostgres.Query do
   defp filter_query_by_operator(column, value, :icontains),
     do: dynamic([q], ilike(^column, fragment("?", ^("%" <> value <> "%"))))
 
-  defp filter_query_by_operator(column, value, :startswith),
+  defp filter_query_by_operator(column, value, :endswith),
     do: dynamic([q], like(^column, fragment("?", ^("%" <> value))))
 
-  defp filter_query_by_operator(column, value, :istartswith),
+  defp filter_query_by_operator(column, value, :iendswith),
     do: dynamic([q], ilike(^column, fragment("?", ^("%" <> value))))
 
-  defp filter_query_by_operator(column, value, :endswith),
+  defp filter_query_by_operator(column, value, :startswith),
     do: dynamic([q], like(^column, fragment("?", ^(value <> "%"))))
 
-  defp filter_query_by_operator(column, value, :iendswith),
+  defp filter_query_by_operator(column, value, :istartswith),
     do: dynamic([q], ilike(^column, fragment("?", ^(value <> "%"))))
 
   defp filter_query_by_operator(column, value, :lte), do: dynamic([q], ^column <= ^value)
