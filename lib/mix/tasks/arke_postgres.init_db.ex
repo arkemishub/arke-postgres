@@ -18,28 +18,97 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
   use Mix.Task
 
   @shortdoc "Init new arke postgres DB"
-  def run(_args) do
-    case ArkePostgres.check_env() do
+  @switches [
+    quiet: :boolean,
+    username: :string,
+    password: :string
+  ]
+  @aliases [
+    q: :quiet,
+    u: :username,
+    pwd: :password
+  ]
+
+  @moduledoc """
+  Create the essentials so you can start using arke.
+
+  The essentials are created in the db specified under
+  `:arke_postgres` option in the current app configuration.
+
+  ## Examples
+
+      $ mix arke_postgres.init_db
+
+
+  ## Command line options
+
+
+    * `--quiet` - do not log output
+    * `--username` - do not create default_user
+    * `--password` - do not create default_user
+
+
+  """
+  @impl true
+  def run(args) do
+    {opts, _} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
+
+    case ArkePostgres.check_env(Mix.env()) do
       {:ok, _} ->
         [:postgrex, :ecto_sql, :arke_auth, :arke]
         |> Enum.each(&Application.ensure_all_started/1)
 
-        ArkePostgres.Repo.start_link()
+        {:ok, pid} = ArkePostgres.Repo.start_link()
 
-        Mix.shell().info("---- Creating schema ----")
+        unless opts[:quiet] do
+          print_message("---- Creating schema ----")
+        end
+
         ArkePostgres.create_project(%{arke_id: :arke_project, id: :arke_system})
-        Mix.shell().info("---- Schema created ----")
-        Mix.shell().info("---- Creating arke_system project ----")
+
+        unless opts[:quiet] do
+          print_message("---- Schema created ----")
+          print_message("---- Creating arke_system project ----")
+        end
+
         create_base_project()
-        Mix.shell().info("---- Project created ----")
-        Mix.shell().info("---- Creating default user ----")
-        create_admin_user()
-        Mix.shell().info("---- User created ----")
+
+        unless opts[:quiet] do
+          print_message("---- Project created ----")
+        end
+
+        unless is_nil(opts[:username]) and is_nil(opts[:password]) do
+          unless opts[:quiet] do
+            print_message("---- Creating user #{opts[:username]} ----")
+          end
+
+          create_admin_user(opts[:username], opts[:password])
+
+          unless opts[:quiet] do
+            print_message("---- User created ----")
+          end
+        end
+
+        unless opts[:quiet] do
+          print_message("---- Creating default user ----")
+        end
+
+        create_admin_user("admin", "admin")
+
+        unless opts[:quiet] do
+          print_message("---- Default user created ----")
+        end
+
+        Process.exit(pid, :normal)
         :ok
 
       {:error, keys} ->
         ArkePostgres.print_missing_env(keys)
     end
+  end
+
+  defp print_message(msg) do
+    Mix.shell().info(msg)
   end
 
   defp create_base_project() do
@@ -53,12 +122,12 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
     )
   end
 
-  defp create_admin_user() do
+  defp create_admin_user(username, password) do
     user_arke = ArkeManager.get(:user, :arke_system)
 
     QueryManager.create(:arke_system, user_arke, %{
-      username: "admin",
-      password: "admin",
+      username: username,
+      password: password,
       type: "super_admin"
     })
   end
