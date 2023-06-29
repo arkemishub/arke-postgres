@@ -347,13 +347,21 @@ defmodule ArkePostgres.Query do
   defp get_value(%{id: id, arke_id: :integer} = _parameter, value) when is_number(value),
     do: value
 
-  defp get_value(%{id: id, arke_id: :integer} = _parameter, value) when is_binary(value),
-    do: String.to_integer(value)
+  defp get_value(%{id: id, arke_id: :integer} = _parameter, value) when is_binary(value) do
+    case Integer.parse(value) do
+      {value, _remainder} -> value
+      _ -> raise("Parameter(#{id}) value not valid")
+    end
+  end
 
   defp get_value(%{id: id, arke_id: :float} = _parameter, value) when is_number(value), do: value
 
-  defp get_value(%{id: id, arke_id: :float} = _parameter, value) when is_binary(value),
-    do: String.to_float(value)
+  defp get_value(%{id: id, arke_id: :float} = _parameter, value) when is_binary(value) do
+    case Float.parse(value) do
+      {value, _remainder} -> value
+      _ -> raise("Parameter(#{id}) value not valid")
+    end
+  end
 
   defp get_value(%{id: id, arke_id: :boolean} = _parameter, true), do: true
   defp get_value(%{id: id, arke_id: :boolean} = _parameter, "true"), do: true
