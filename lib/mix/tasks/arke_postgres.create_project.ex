@@ -47,11 +47,16 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
         [:postgrex, :ecto_sql, :arke]
         |> Enum.each(&Application.ensure_all_started/1)
 
-        {:ok, pid} = ArkePostgres.Repo.start_link()
+        case ArkePostgres.Repo.start_link() do
+          {:ok, pid} ->
+            args |> parse_args() |> create_project()
+            Process.exit(pid, :normal)
+            :ok
 
-        args |> parse_args() |> create_project()
-        Process.exit(pid, :normal)
-        :ok
+          {:error, _} ->
+            args |> parse_args() |> create_project()
+            :ok
+        end
 
       {:error, keys} ->
         ArkePostgres.print_missing_env(keys)

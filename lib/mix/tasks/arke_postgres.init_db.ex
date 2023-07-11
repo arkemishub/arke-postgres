@@ -58,52 +58,60 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
         [:postgrex, :ecto_sql, :arke_auth, :arke]
         |> Enum.each(&Application.ensure_all_started/1)
 
-        {:ok, pid} = ArkePostgres.Repo.start_link()
+        case ArkePostgres.Repo.start_link() do
+          {:ok, pid} ->
+            create_default(opts)
+            Process.exit(pid, :normal)
 
-        unless opts[:quiet] do
-          print_message("---- Creating schema ----")
+          {:error, _} ->
+            create_default(opts)
         end
 
-        ArkePostgres.create_project(%{arke_id: :arke_project, id: :arke_system})
-
-        unless opts[:quiet] do
-          print_message("---- Schema created ----")
-          print_message("---- Creating arke_system project ----")
-        end
-
-        create_base_project()
-
-        unless opts[:quiet] do
-          print_message("---- Project created ----")
-        end
-
-        unless is_nil(opts[:username]) and is_nil(opts[:password]) do
-          unless opts[:quiet] do
-            print_message("---- Creating user #{opts[:username]} ----")
-          end
-
-          create_admin_user(opts[:username], opts[:password])
-
-          unless opts[:quiet] do
-            print_message("---- User created ----")
-          end
-        end
-
-        unless opts[:quiet] do
-          print_message("---- Creating default user ----")
-        end
-
-        create_admin_user("admin", "admin")
-
-        unless opts[:quiet] do
-          print_message("---- Default user created ----")
-        end
-
-        Process.exit(pid, :normal)
         :ok
 
       {:error, keys} ->
         ArkePostgres.print_missing_env(keys)
+    end
+  end
+
+  defp create_default(opts) do
+    unless opts[:quiet] do
+      print_message("---- Creating schema ----")
+    end
+
+    ArkePostgres.create_project(%{arke_id: :arke_project, id: :arke_system})
+
+    unless opts[:quiet] do
+      print_message("---- Schema created ----")
+      print_message("---- Creating arke_system project ----")
+    end
+
+    create_base_project()
+
+    unless opts[:quiet] do
+      print_message("---- Project created ----")
+    end
+
+    unless is_nil(opts[:username]) and is_nil(opts[:password]) do
+      unless opts[:quiet] do
+        print_message("---- Creating user #{opts[:username]} ----")
+      end
+
+      create_admin_user(opts[:username], opts[:password])
+
+      unless opts[:quiet] do
+        print_message("---- User created ----")
+      end
+    end
+
+    unless opts[:quiet] do
+      print_message("---- Creating default user ----")
+    end
+
+    create_admin_user("admin", "admin")
+
+    unless opts[:quiet] do
+      print_message("---- Default user created ----")
     end
   end
 

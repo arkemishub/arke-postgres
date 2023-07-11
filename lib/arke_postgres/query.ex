@@ -255,10 +255,15 @@ defmodule ArkePostgres.Query do
       column = get_column(parameter)
       value = get_value(parameter, value)
 
-      condition =
-        filter_query_by_operator(column, value, operator) |> handle_negate_condition(negate)
+      if is_nil(value) or operator == :isnull do
+        condition = get_nil_query(parameter, column)
+        add_condition_to_clause(condition, clause, logic)
+      else
+        condition =
+          filter_query_by_operator(column, value, operator) |> handle_negate_condition(negate)
 
-      add_condition_to_clause(condition, clause, logic)
+        add_condition_to_clause(condition, clause, logic)
+      end
     end)
   end
 
@@ -334,6 +339,9 @@ defmodule ArkePostgres.Query do
   defp get_arke_column(%{id: id, arke_id: :list} = _parameter),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::JSON", field(q, :data), ^Atom.to_string(id)))
 
+  defp get_arke_column(%{id: id, arke_id: :link} = _parameter),
+    do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
+
   defp get_value(_parameter, value) when is_nil(value), do: value
   defp get_value(_parameter, value) when is_list(value), do: value
   defp get_value(_parameter, value) when is_map(value), do: value
@@ -406,6 +414,7 @@ defmodule ArkePostgres.Query do
 
   defp get_value(%{id: id, arke_id: :dict} = _parameter, value), do: value
   defp get_value(%{id: id, arke_id: :list} = _parameter, value), do: value
+  defp get_value(%{id: id, arke_id: :link} = _parameter, value), do: value
   defp get_value(%{id: id}, value), do: raise("Parameter(#{id}) value not valid")
 
   defp parse_number_list(parameter, value, func) do
@@ -421,6 +430,13 @@ defmodule ArkePostgres.Query do
         end
     end
   end
+
+  defp get_nil_query(%{id: id} = _parameter, column),
+    do:
+      dynamic(
+        [q],
+        fragment("? IS NULL AND (data \\? ?)", ^column, ^Atom.to_string(id))
+      )
 
   defp filter_query_by_operator(column, value, :eq), do: dynamic([q], ^column == ^value)
 
