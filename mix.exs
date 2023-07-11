@@ -1,15 +1,21 @@
 defmodule ArkePostgres.MixProject do
   use Mix.Project
 
+  @version "0.2.4"
+  @scm_url "https://github.com/arkemishub/arke-postgres"
+  @site_url "https://arkehub.com"
+
   def project do
     [
       app: :arke_postgres,
-      version: "0.2.3",
+      version: @version,
       build_path: "./_build",
       config_path: "./config/config.exs",
       deps_path: "./deps",
       lockfile: "./mix.lock",
       elixir: "~> 1.13",
+      source_url: @scm_url,
+      homepage_url: @site_url,
       description: description(),
       package: package(),
       start_permanent: Mix.env() == :prod,
@@ -49,8 +55,8 @@ defmodule ArkePostgres.MixProject do
       # These are the default files included in the package
       licenses: ["Apache-2.0"],
       links: %{
-        "Website" => "https://arkehub.com",
-        "Github" => "https://github.com/arkemishub/arke-postgres"
+        "Website" => @site_url,
+        "Github" => @scm_url
       }
     ]
   end
