@@ -16,7 +16,8 @@ defmodule ArkePostgres do
   alias ArkePostgres.{Table, ArkeUnit}
 
   def init() do
-    case check_env(Mix.env()) do
+
+    case check_env() do
       {:ok, nil} ->
         try do
           projects =
@@ -49,9 +50,7 @@ defmodule ArkePostgres do
 
   def print_missing_env(keys), do: print_missing_env([keys])
 
-  def check_env(:test), do: {:ok, nil}
-
-  def check_env(_env) do
+  def check_env() do
     keys = ["DB_NAME", "DB_HOSTNAME", "DB_USER", "DB_PASSWORD"]
 
     key_map =
