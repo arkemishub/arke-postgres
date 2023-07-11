@@ -354,6 +354,9 @@ defmodule ArkePostgres.Query do
     end
   end
 
+  defp get_value(%{id: id, arke_id: :integer} = parameter, value) when is_list(value),
+    do: parse_number_list(parameter, value, fn v -> is_integer(v) end)
+
   defp get_value(%{id: id, arke_id: :float} = _parameter, value) when is_number(value), do: value
 
   defp get_value(%{id: id, arke_id: :float} = _parameter, value) when is_binary(value) do
@@ -362,6 +365,9 @@ defmodule ArkePostgres.Query do
       _ -> raise("Parameter(#{id}) value not valid")
     end
   end
+
+  defp get_value(%{id: id, arke_id: :float} = parameter, value) when is_list(value),
+    do: parse_number_list(parameter, value, fn v -> is_number(v) end)
 
   defp get_value(%{id: id, arke_id: :boolean} = _parameter, true), do: true
   defp get_value(%{id: id, arke_id: :boolean} = _parameter, "true"), do: true
@@ -401,6 +407,20 @@ defmodule ArkePostgres.Query do
   defp get_value(%{id: id, arke_id: :dict} = _parameter, value), do: value
   defp get_value(%{id: id, arke_id: :list} = _parameter, value), do: value
   defp get_value(%{id: id}, value), do: raise("Parameter(#{id}) value not valid")
+
+  defp parse_number_list(parameter, value, func) do
+    case Enum.all?(value, &is_binary(&1)) do
+      true ->
+        Enum.map(value, &get_value(parameter, &1))
+
+      false ->
+        # check if all the values are numbers, otherwise throw an error
+        case Enum.all?(value, &func.(&1)) do
+          true -> Enum.map(value, &get_value(parameter, &1))
+          false -> raise("Parameter(#{parameter.id}) value not valid")
+        end
+    end
+  end
 
   defp filter_query_by_operator(column, value, :eq), do: dynamic([q], ^column == ^value)
 
