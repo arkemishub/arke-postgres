@@ -74,6 +74,7 @@ defmodule ArkePostgres.Query do
       "string",
       "unit",
       "link",
+      "dynamic",
       "date",
       "datetime",
       "time"
@@ -342,6 +343,9 @@ defmodule ArkePostgres.Query do
   defp get_arke_column(%{id: id, arke_id: :link} = _parameter),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
 
+    defp get_arke_column(%{id: id, arke_id: :dynamic} = _parameter),
+    do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
+
   defp get_value(_parameter, value) when is_nil(value), do: value
   defp get_value(_parameter, value) when is_list(value), do: value
   defp get_value(_parameter, value) when is_map(value), do: value
@@ -415,6 +419,7 @@ defmodule ArkePostgres.Query do
   defp get_value(%{id: id, arke_id: :dict} = _parameter, value), do: value
   defp get_value(%{id: id, arke_id: :list} = _parameter, value), do: value
   defp get_value(%{id: id, arke_id: :link} = _parameter, value), do: value
+  defp get_value(%{id: id, arke_id: :dynamic} = _parameter, value), do: value
   defp get_value(%{id: id}, value), do: raise("Parameter(#{id}) value not valid")
 
   defp parse_number_list(parameter, value, func) do

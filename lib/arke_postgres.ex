@@ -13,6 +13,7 @@
 # limitations under the License.
 
 defmodule ArkePostgres do
+  alias Arke.Boundary.GroupManager
   alias ArkePostgres.{Table, ArkeUnit}
 
   def init() do
@@ -22,12 +23,13 @@ defmodule ArkePostgres do
         try do
           projects =
             Arke.QueryManager.query(arke: :arke_project, project: :arke_system)
-            |> Arke.QueryManager.filter(:id, :eq, :arke_system, true)
+            # |> Arke.QueryManager.filter(:id, :eq, :arke_system, true)
             |> Arke.QueryManager.filter(:arke_id, :eq, "arke_project")
             |> Arke.QueryManager.all()
 
           Enum.each(projects, fn %{id: project_id} = _project ->
             start_managers(project_id)
+            get_group_modules(project_id)
           end)
 
           :ok
@@ -41,6 +43,36 @@ defmodule ArkePostgres do
         :error
     end
   end
+
+  defp get_group_modules(project) do
+    Enum.reduce(:application.loaded_applications(), [], fn {app, _, _}, group_list ->
+      {:ok, modules} = :application.get_key(app, :modules)
+      module_group_list =
+        Enum.reduce(modules, [], fn mod, mod_group_list ->
+          is_group =
+            Code.ensure_loaded?(mod) and :erlang.function_exported(mod, :is_group?, 0) and
+              mod.group_from_attr != nil and mod.is_group? == true
+
+              mod_group_list = check_group_module(project, mod, mod_group_list, is_group)
+        end)
+
+      group_list ++ module_group_list
+    end)
+  end
+
+  defp check_group_module(project, mod, group_list, true) do
+    %{id: id} = mod.group_from_attr
+    # IO.inspect("Modifica gruppo Gruppo #{id} - #{project}")
+    group = GroupManager.get(id, project)
+    update_group_manager_and_list(group, group_list, mod)
+  end
+  defp update_group_manager_and_list(group, group_list, _) when is_nil(group), do: group_list
+  defp update_group_manager_and_list(group, group_list, mod) do
+    GroupManager.update(group, Arke.Core.Unit.update(group, __module__: mod))
+    [mod | group_list]
+  end
+
+  defp check_group_module(_, _, group_list, false), do: group_list
 
   def print_missing_env(keys) when is_list(keys) do
     for k <- keys do
@@ -80,8 +112,7 @@ defmodule ArkePostgres do
 
       Arke.Boundary.ArkeManager.create(unit, project_id)
     end)
-
-    Enum.each(groups, fn unit -> Arke.Boundary.GroupManager.create(unit, project_id) end)
+    Enum.each(groups, fn unit -> Arke.Boundary.GroupManager.create(Arke.Core.Unit.update(unit, __module__: Arke.System.BaseGroup), project_id) end)
   end
 
   def create(project, %{arke_id: arke_id} = unit) do
