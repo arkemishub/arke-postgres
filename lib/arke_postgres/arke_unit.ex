@@ -96,7 +96,7 @@ defmodule ArkePostgres.ArkeUnit do
     end)
   end
 
-  defp update_encoded_unit_data(%{data: %{only_run_time: true}}, data, _), do: data
+  defp update_encoded_unit_data(%{data: %{only_runtime: true}}, data, _), do: data
 
   defp update_encoded_unit_data(%{id: id}, data, value),
     do: Map.put_new(data, Atom.to_string(id), %{:value => value, :datetime => Arke.DatetimeHandler.now(:datetime)})

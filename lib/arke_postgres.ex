@@ -13,7 +13,7 @@
 # limitations under the License.
 
 defmodule ArkePostgres do
-  alias Arke.Boundary.GroupManager
+  alias Arke.Boundary.{GroupManager, ArkeManager}
   alias ArkePostgres.{Table, ArkeUnit}
 
   def init() do
@@ -29,6 +29,7 @@ defmodule ArkePostgres do
 
           Enum.each(projects, fn %{id: project_id} = _project ->
             start_managers(project_id)
+            get_arke_modules(project_id)
             get_group_modules(project_id)
           end)
 
@@ -43,6 +44,35 @@ defmodule ArkePostgres do
         :error
     end
   end
+
+  defp get_arke_modules(project) do
+    Enum.reduce(:application.loaded_applications(), [], fn {app, _, _}, arke_list ->
+      {:ok, modules} = :application.get_key(app, :modules)
+
+      module_arke_list =
+        Enum.reduce(modules, [], fn mod, mod_arke_list ->
+          is_arke =
+            Code.ensure_loaded?(mod) and :erlang.function_exported(mod, :arke_from_attr, 0) and
+              mod.arke_from_attr != nil and mod.arke_from_attr.remote == true
+
+              mod_arke_list = check_arke_module(project, mod, mod_arke_list, is_arke)
+        end)
+
+      arke_list ++ module_arke_list
+    end)
+  end
+
+  defp check_arke_module(project, mod, arke_list, true) do
+    %{id: id} = mod.arke_from_attr
+    arke = ArkeManager.get(id, project)
+    update_arke_manager_and_list(arke, arke_list, mod)
+  end
+  defp update_arke_manager_and_list(arke, arke_list, _) when is_nil(arke), do: arke_list
+  defp update_arke_manager_and_list(arke, arke_list, mod) do
+    ArkeManager.update(arke, Arke.Core.Unit.update(arke, __module__: mod))
+    [mod | arke_list]
+  end
+  defp check_arke_module(_, _, arke_list, false), do: arke_list
 
   defp get_group_modules(project) do
     Enum.reduce(:application.loaded_applications(), [], fn {app, _, _}, group_list ->
