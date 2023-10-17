@@ -224,7 +224,6 @@ defmodule ArkePostgres.Query do
     arke = get_arke(project, record, arke)
     {metadata, record} = Map.pop(record, :metadata)
     {record_data, record} = Map.pop(record, :data, %{})
-
     record_data =
       Enum.map(arke.data.parameters, fn p ->
         {p.id, Map.get(record_data, Atom.to_string(p.id), nil)}
