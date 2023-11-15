@@ -136,6 +136,7 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
     QueryManager.create(:arke_system, user_arke, %{
       username: username,
       password: password,
+      email: "foo@bar.com",
       type: "super_admin"
     })
   end
