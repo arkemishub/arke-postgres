@@ -17,7 +17,6 @@ defmodule ArkePostgres do
   alias ArkePostgres.{Table, ArkeUnit}
 
   def init() do
-
     case check_env() do
       {:ok, nil} ->
         try do
@@ -55,7 +54,7 @@ defmodule ArkePostgres do
             Code.ensure_loaded?(mod) and :erlang.function_exported(mod, :arke_from_attr, 0) and
               mod.arke_from_attr != nil and mod.arke_from_attr.remote == true
 
-              mod_arke_list = check_arke_module(project, mod, mod_arke_list, is_arke)
+          mod_arke_list = check_arke_module(project, mod, mod_arke_list, is_arke)
         end)
 
       arke_list ++ module_arke_list
@@ -67,23 +66,27 @@ defmodule ArkePostgres do
     arke = ArkeManager.get(id, project)
     update_arke_manager_and_list(arke, arke_list, mod)
   end
+
   defp update_arke_manager_and_list(arke, arke_list, _) when is_nil(arke), do: arke_list
+
   defp update_arke_manager_and_list(arke, arke_list, mod) do
     ArkeManager.update(arke, Arke.Core.Unit.update(arke, __module__: mod))
     [mod | arke_list]
   end
+
   defp check_arke_module(_, _, arke_list, false), do: arke_list
 
   defp get_group_modules(project) do
     Enum.reduce(:application.loaded_applications(), [], fn {app, _, _}, group_list ->
       {:ok, modules} = :application.get_key(app, :modules)
+
       module_group_list =
         Enum.reduce(modules, [], fn mod, mod_group_list ->
           is_group =
             Code.ensure_loaded?(mod) and :erlang.function_exported(mod, :is_group?, 0) and
               mod.group_from_attr != nil and mod.is_group? == true
 
-              mod_group_list = check_group_module(project, mod, mod_group_list, is_group)
+          mod_group_list = check_group_module(project, mod, mod_group_list, is_group)
         end)
 
       group_list ++ module_group_list
@@ -96,7 +99,9 @@ defmodule ArkePostgres do
     group = GroupManager.get(id, project)
     update_group_manager_and_list(group, group_list, mod)
   end
+
   defp update_group_manager_and_list(group, group_list, _) when is_nil(group), do: group_list
+
   defp update_group_manager_and_list(group, group_list, mod) do
     GroupManager.update(group, Arke.Core.Unit.update(group, __module__: mod))
     [mod | group_list]
@@ -141,7 +146,13 @@ defmodule ArkePostgres do
 
       Arke.Boundary.ArkeManager.create(unit, project_id)
     end)
-    Enum.each(groups, fn unit -> Arke.Boundary.GroupManager.create(Arke.Core.Unit.update(unit, __module__: Arke.System.BaseGroup), project_id) end)
+
+    Enum.each(groups, fn unit ->
+      Arke.Boundary.GroupManager.create(
+        Arke.Core.Unit.update(unit, __module__: Arke.System.BaseGroup),
+        project_id
+      )
+    end)
   end
 
   def create(project, %{arke_id: arke_id} = unit) do

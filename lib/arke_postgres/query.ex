@@ -224,6 +224,7 @@ defmodule ArkePostgres.Query do
     arke = get_arke(project, record, arke)
     {metadata, record} = Map.pop(record, :metadata)
     {record_data, record} = Map.pop(record, :data, %{})
+
     record_data =
       Enum.map(arke.data.parameters, fn p ->
         {p.id, Map.get(record_data, Atom.to_string(p.id), nil)}
@@ -256,7 +257,7 @@ defmodule ArkePostgres.Query do
       value = get_value(parameter, value)
 
       if is_nil(value) or operator == :isnull do
-        condition = get_nil_query(parameter, column)
+        condition = get_nil_query(parameter, column) |> handle_negate_condition(negate)
         add_condition_to_clause(condition, clause, logic)
       else
         condition =
@@ -342,7 +343,7 @@ defmodule ArkePostgres.Query do
   defp get_arke_column(%{id: id, arke_id: :link} = _parameter),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
 
-    defp get_arke_column(%{id: id, arke_id: :dynamic} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :dynamic} = _parameter),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
 
   defp get_value(_parameter, value) when is_nil(value), do: value
