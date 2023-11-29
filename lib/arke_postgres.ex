@@ -173,7 +173,8 @@ defmodule ArkePostgres do
          %{data: %{type: "table"}} = arke,
          %{data: data, metadata: metadata} = unit
        ) do
-    data = data |> Map.merge(%{metadata: metadata}) |> data_as_klist
+    # todo: remove once the project is not needed anymore
+    data = data |> Map.merge(%{metadata: Map.delete(metadata, :project)}) |> data_as_klist
     Table.insert(project, arke, data)
     {:ok, unit}
   end
@@ -198,14 +199,22 @@ defmodule ArkePostgres do
     {:ok, unit} = handle_update(project, arke, unit)
   end
 
-  def handle_update(project, %{data: %{type: "table"}} = arke, unit) do
-    data = unit |> filter_primary_keys(false) |> data_as_klist
+  def handle_update(
+        project,
+        %{data: %{type: "table"}} = arke,
+        %{data: data, metadata: metadata} = unit
+      ) do
+    data =
+      unit
+      |> filter_primary_keys(false)
+      # todo: remove once the project is not needed anymore
+      |> Map.merge(%{metadata: Map.delete(metadata, :project)})
+      |> data_as_klist
+
     where = unit |> filter_primary_keys(true) |> data_as_klist
 
-    case Table.update(project, arke, data, where) do
-      {:ok, _} -> {:ok, unit}
-      {:error, msg} -> {:error, msg}
-    end
+    Table.update(project, arke, data, where)
+    {:ok, unit}
   end
 
   def handle_update(project, %{data: %{type: "arke"}} = arke, unit) do
