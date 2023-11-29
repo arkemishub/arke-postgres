@@ -46,16 +46,16 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
       {:ok, _} ->
         [:postgrex, :ecto_sql, :arke]
         |> Enum.each(&Application.ensure_all_started/1)
-
+        parsed_args = parse_args(args)
+        check_app_name!(parsed_args)
         case ArkePostgres.Repo.start_link() do
           {:ok, pid} ->
-            args |> parse_args() |> create_project()
+            create_data(parsed_args)
             Process.exit(pid, :normal)
             :ok
 
-          {:error, _} ->
-            args |> parse_args() |> create_project()
-            :ok
+          {:error, _} -> create_data(parsed_args)
+
         end
 
       {:error, keys} ->
@@ -63,13 +63,37 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
     end
   end
 
-  defp create_project([{:id, id} | _] = opts) do
+  defp check_app_name!([{:id, project_id} | _] =opts) do
+    unless project_id =~ Regex.recompile!(~r/^[a-z_]*$/) do
+
+      Mix.raise(
+        "Application name must have only lowercase letters and underscorres got: #{inspect(project_id)}"
+      )
+    end
+  end
+
+  defp create_data(parsed_args) do
+    with {:ok, _project} <- create_project(parsed_args),
+         {:ok, admin_unit} <- create_super_admin_arke(parsed_args),
+         {:ok, _group_unit} <- create_member_group(parsed_args),
+         {:ok, dynamic_unit} <- create_dynamic_arke(parsed_args),
+         {:ok, dynamic_link} <- create_dynamic_link(admin_unit,dynamic_unit,parsed_args) do
+      :ok
+    else
+      {:error,msg} ->
+        IO.inspect(msg,syntax_colors: [atom: :cyan, string: :red])
+        :ok
+
+    end
+  end
+
+  defp create_project([{:id, project_id} | _] = opts) do
     arke_project = ArkeManager.get(:arke_project, :arke_system)
 
     QueryManager.create(:arke_system, arke_project,
-      id: id,
-      label: Keyword.get(opts, :label, String.capitalize(id)),
-      description: Keyword.get(opts, :description, "Project #{id}"),
+      id: project_id,
+      label: Keyword.get(opts, :label, String.capitalize(project_id)),
+      description: Keyword.get(opts, :description, "Project #{project_id}"),
       type: "postgres_schema"
     )
   end
@@ -86,4 +110,44 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
 
     options
   end
+
+  defp create_member_group([{:id, project_id} | _] = _opts) do
+    arke_group = ArkeManager.get(:group,:arke_system)
+    QueryManager.create(project_id, arke_group,
+      id: :arke_auth_member,
+      label: "Arke auth member",
+      description: "Handle members with arke_auth",
+      arke_list: ["super_admin"]
+    )
+  end
+
+  defp create_super_admin_arke([{:id, project_id} | _] =_opts) do
+    arke_model = ArkeManager.get(:arke,:arke_system)
+    QueryManager.create(project_id, arke_model,
+      id: :super_admin,
+      label: "Super admin",
+    )
+  end
+
+  defp create_dynamic_link(parent,child,[{:id, project_id} | _] =_opts) do
+    arke_link = ArkeManager.get(:arke_link, :arke_system)
+    QueryManager.create(project_id, arke_link,
+      parent_id: Atom.to_string(parent.id),
+      child_id: Atom.to_string(child.id),
+      type: "parameter",
+      metadata: %{}
+    )
+  end
+
+  defp create_dynamic_arke([{:id, project_id} | _] =_opts) do
+    dynamic_model = ArkeManager.get(:dynamic,:arke_system)
+    QueryManager.create(project_id, dynamic_model,
+      id: :arke_system_user,
+      label: "Arke System User",
+      arke_list: ["super_admin"]
+    )
+  end
+
 end
+
+
