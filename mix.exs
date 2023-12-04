@@ -1,7 +1,7 @@
 defmodule ArkePostgres.MixProject do
   use Mix.Project
 
-  @version "0.2.8"
+  @version "0.2.9"
   @scm_url "https://github.com/arkemishub/arke-postgres"
   @site_url "https://arkehub.com"
 
