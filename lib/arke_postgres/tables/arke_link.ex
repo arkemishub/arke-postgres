@@ -23,7 +23,7 @@ defmodule ArkePostgres.ArkeLink do
     field(:type, :string, default: "link")
     belongs_to(:parent_id, ArkePostgres.ArkeUnit, primary_key: true)
     belongs_to(:child_id, ArkePostgres.ArkeUnit, primary_key: true)
-    field(:metadata, :map, default: %{}, primary_key: true)
+    field(:metadata, :map, default: %{})
   end
 
   def changeset(args \\ []) do
