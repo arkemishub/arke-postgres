@@ -310,7 +310,7 @@ defmodule ArkePostgres.Query do
     do:
       dynamic(
         [q],
-        fragment("(? -> ? ->> 'value')::datetime", field(q, :data), ^Atom.to_string(id))
+        fragment("(? -> ? ->> 'value')::timestamp", field(q, :data), ^Atom.to_string(id))
       )
 
   defp get_arke_column(%{id: id, arke_id: :date} = _parameter),
