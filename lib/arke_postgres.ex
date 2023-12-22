@@ -191,7 +191,7 @@ defmodule ArkePostgres do
   end
 
   defp handle_create(_, _, _) do
-    {:ok, "arke type not supported"}
+    {:error, "arke type not supported"}
   end
 
   def update(project, %{arke_id: arke_id} = unit) do
@@ -281,6 +281,7 @@ defmodule ArkePostgres do
     Enum.to_list(data)
   end
 
+  defp handle_changeset_errros(errors)when is_binary(errors), do: errors
   defp handle_changeset_errros(errors) do
     Enum.map(errors, fn {field, detail} ->
       "#{field}: #{render_detail(detail)}"

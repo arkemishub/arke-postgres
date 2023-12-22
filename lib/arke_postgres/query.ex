@@ -134,30 +134,6 @@ defmodule ArkePostgres.Query do
     end)
   end
 
-  #  def get_parameters(project_id) do
-  #    query =  base_query()
-  #    parameters_id = ["boolean", "dict", "float", "integer", "string", "unit", "link", "date", "datetime", "time"]
-  #    (from q in query, where: q.arke_id in ^parameters_id)
-  #                            |>  ArkePostgres.Repo.all(prefix: project_id) |> generate_units(nil, project_id)
-  #  end
-  #
-  #  def get_arke_list(project_id) do
-  #    arke_list = (from q in base_query(), where: q.arke_id == "arke")
-  #      |>  ArkePostgres.Repo.all(prefix: project_id) |> generate_units("arke", project_id)
-  #
-  #    arke_link = Arke.Boundary.ArkeManager.get(:arke_link, :arke_system)
-  #    links = (from q in table_query(arke_link, nil), where: q.type in ["parameter", "group"])
-  #      |>  ArkePostgres.Repo.all(prefix: project_id)
-  #    parameter_links = Enum.filter(parameter_links, fn x -> x.type == "parameter" end)
-  #    group_links = Enum.filter(parameter_links, fn x -> x.type == "group" end)
-  #
-  #    Enum.reduce(arke_list, [], fn %{id: id}=unit, new_arke_list ->
-  #      params = Enum.reduce(Enum.filter(parameter_links, fn x -> x.parent_id == Atom.to_string(id) end), [], fn p, new_params ->
-  #        [%{id: String.to_existing_atom(p.child_id), type: nil, metadata: p.metadata} | new_params]
-  #      end)
-  #      [Arke.Core.Unit.update(unit, parameters: params) | new_arke_list]
-  #    end)
-  #  end
 
   ######################################################################################################################
   # PRIVATE FUNCTIONS ##################################################################################################
