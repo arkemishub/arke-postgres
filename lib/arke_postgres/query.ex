@@ -56,7 +56,7 @@ defmodule ArkePostgres.Query do
     do: get_table_column(parameter)
 
   def get_manager_units(project_id) do
-    arke_link = Arke.Boundary.ArkeManager.get(:arke_link, :arke_system)
+    arke_link =%{id: :arke_link, data: %{parameters: [%{id: :type},%{id: :child_id},%{id: :parent_id},%{id: :metadata}]}}
 
     links =
       from(q in table_query(arke_link, nil), where: q.type in ["parameter", "group"])
@@ -85,37 +85,56 @@ defmodule ArkePostgres.Query do
     unit_list =
       from(q in base_query(), where: q.arke_id in ^list_arke_id)
       |> ArkePostgres.Repo.all(prefix: project_id)
-      |> generate_units(nil, project_id)
 
-    parameters = Enum.filter(unit_list, fn u -> Atom.to_string(u.arke_id) in parameters_id end)
+
+    parameters = parse_parameters(Enum.filter(unit_list, fn u -> u.arke_id in parameters_id end))
 
     arke_list =
       parse_arke_list(
-        Enum.filter(unit_list, fn u -> Atom.to_string(u.arke_id) == "arke" end),
+        Enum.filter(unit_list, fn u -> u.arke_id == "arke" end),
         parameter_links
       )
-
     groups =
       parse_groups(
-        Enum.filter(unit_list, fn u -> Atom.to_string(u.arke_id) == "group" end),
+        Enum.filter(unit_list, fn u -> u.arke_id == "group" end),
         group_links
       )
 
     {parameters, arke_list, groups}
   end
 
+  def get_project_record() do
+    unit_list =
+      from(q in base_query(), where: q.arke_id == "arke_project")
+      |> ArkePostgres.Repo.all(prefix: "arke_system")
+  end
+
   defp parse_arke_list(arke_list, parameter_links) do
+    # todo: remove the string to atom when everything would become string
     Enum.reduce(arke_list, [], fn %{id: id} = unit, new_arke_list ->
       params =
         Enum.reduce(
-          Enum.filter(parameter_links, fn x -> x.parent_id == Atom.to_string(id) end),
+          Enum.filter(parameter_links, fn x -> x.parent_id == id end),
           [],
           fn p, new_params ->
-            [%{id: String.to_existing_atom(p.child_id), metadata: p.metadata} | new_params]
+            [%{id: String.to_atom(p.child_id), metadata: Enum.reduce(p.metadata,%{}, fn {key, val}, acc -> Map.put(acc, String.to_atom(key), val) end)} | new_params]
           end
         )
+        updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
+        |> Map.put(:id, id)
+        |> Map.update(:parameters,[], fn current -> params ++ current end)
 
-      [Arke.Core.Unit.update(unit, parameters: params) | new_arke_list]
+      [ updated_data | new_arke_list]
+    end)
+  end
+
+  defp parse_parameters(parameter_list)do
+    Enum.reduce(parameter_list, [], fn %{id: id, arke_id: arke_id} = unit, new_parameter_list ->
+
+      updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
+                     |> Map.put(:id, id)
+                     |> Map.put(:type,arke_id)
+      [ updated_data | new_parameter_list]
     end)
   end
 
@@ -123,14 +142,16 @@ defmodule ArkePostgres.Query do
     Enum.reduce(groups, [], fn %{id: id} = unit, new_groups ->
       arke_list =
         Enum.reduce(
-          Enum.filter(group_links, fn x -> x.parent_id == Atom.to_string(id) end),
+          Enum.filter(group_links, fn x -> x.parent_id == id end),
           [],
           fn p, new_params ->
-            [%{id: String.to_existing_atom(p.child_id), metadata: p.metadata} | new_params]
+            [%{id: String.to_atom(p.child_id), metadata: p.metadata} | new_params]
           end
         )
-
-      [Arke.Core.Unit.update(unit, arke_list: arke_list) | new_groups]
+      updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
+                     |> Map.put(:id, id)
+                     |> Map.update(:arke_list,[], fn current -> arke_list ++ current end)
+      [ updated_data | new_groups]
     end)
   end
 
@@ -207,7 +228,6 @@ defmodule ArkePostgres.Query do
       end)
       |> Map.new()
 
-    #    record_data = Enum.map(record_data, fn {k, v} -> {String.to_existing_atom(k), v} end) |> Map.new()
     record = Map.put(record, :metadata, Map.merge(metadata, %{project: project}))
     record = Map.merge(record_data, record)
     Arke.Core.Unit.load(arke, record)
