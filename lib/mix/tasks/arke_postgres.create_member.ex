@@ -66,14 +66,15 @@ defmodule Mix.Tasks.ArkePostgres.CreateMember do
   end
 
   defp parse_options(argv) do
+    IO.inspect(OptionParser.parse!(argv, strict: @switches))
     case OptionParser.parse!(argv, strict: @switches) do
-      {_opts, []} ->
+      {[], _opts} ->
         Mix.Tasks.Help.run(["arke_postgres.create_member"])
 
-      {_opts, [project,username,password| _]} ->
+      {[project: project,username: username,password: password], _opts} ->
         check_user(String.to_atom(project),username,password)
 
-      {_opts, [project| _]} ->
+      {[project: project], _opts} ->
         # create user admin admin
         check_user(String.to_atom(project),"admin","admin")
 
