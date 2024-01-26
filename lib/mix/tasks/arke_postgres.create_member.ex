@@ -34,12 +34,14 @@ defmodule Mix.Tasks.ArkePostgres.CreateMember do
     * `--project` - The id of the project where to create the member
     * `--username` - The username of the member
     * `--password` - The password of the member
+    * `--email` - The email of the member
   """
 
   @switches [
     project: :string,
     username: :string,
     password: :string,
+  email: :string
   ]
 
   @impl true
@@ -66,31 +68,33 @@ defmodule Mix.Tasks.ArkePostgres.CreateMember do
   end
 
   defp parse_options(argv) do
-    IO.inspect(OptionParser.parse!(argv, strict: @switches))
     case OptionParser.parse!(argv, strict: @switches) do
       {[], _opts} ->
         Mix.Tasks.Help.run(["arke_postgres.create_member"])
 
-      {[project: project,username: username,password: password], _opts} ->
-        check_user(String.to_atom(project),username,password)
+      {[project: project,username: username,password: password]=data, _opts} ->
 
-      {[project: project], _opts} ->
+      check_user(String.to_atom(project),username,password,data)
+
+      {[project: project]=data, _opts} ->
+
         # create user admin admin
-        check_user(String.to_atom(project),"admin","admin")
+        check_user(String.to_atom(project),"admin","admin",data)
 
         end
   end
 
-  defp check_user(project_id,username,password)do
+  defp check_user(project_id,username,password,opts)do
     case QueryManager.get_by(project: :arke_system, arke_id: :user, username: username) do
-      nil -> create_user(project_id,username,password)
+      nil -> create_user(project_id,username,password,opts)
       %Arke.Core.Unit{}=user ->  create_member(project_id,user)
     end
   end
 
-  defp create_user(project_id,username,password) do
+  defp create_user(project_id,username,password,opts) do
     user_model = ArkeManager.get(:user, :arke_system)
-    data = %{username: username,password: password,email: "#{username}@bar.com",type: "super_admin"}
+    email = Keyword.get(opts,:email,"#{username}@bar.com")
+    data = %{username: username,password: password,email: email,type: "super_admin"}
 
     with {:ok,user} <- QueryManager.create(:arke_system, user_model,data),
          {:ok,_member} <- create_member(project_id,user)  do
