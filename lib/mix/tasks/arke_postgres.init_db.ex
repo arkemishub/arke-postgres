@@ -104,14 +104,16 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
       end
     end
 
-    unless opts[:quiet] do
-      print_message("---- Creating default user ----")
-    end
+    unless not is_nil(opts[:username]) and not is_nil(opts[:password]) do
+      unless opts[:quiet] do
+        print_message("---- Creating default user ----")
+      end
 
-    create_admin_user("admin", "admin")
+      create_admin_user("admin", "admin")
 
-    unless opts[:quiet] do
-      print_message("---- Default user created ----")
+      unless opts[:quiet] do
+        print_message("---- Default user created ----")
+      end
     end
   end
 
@@ -136,6 +138,7 @@ defmodule Mix.Tasks.ArkePostgres.InitDb do
     QueryManager.create(:arke_system, user_arke, %{
       username: username,
       password: password,
+      email: "foo@bar.com",
       type: "super_admin"
     })
   end
