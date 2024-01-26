@@ -150,7 +150,15 @@ defmodule ArkePostgres.Query do
         )
       updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
                      |> Map.put(:id, id)
-                     |> Map.update(:arke_list,[], fn current -> arke_list ++ current end)
+                     |> Map.update(:arke_list,[], fn db_arke_list ->
+      Enum.reduce(db_arke_list,[], fn key,acc ->
+        case Enum.find(arke_list, fn %{id: id, metadata: _metadata} -> to_string(id) == key end) do
+          nil -> [key|acc]
+          data ->
+            [data|acc]
+        end
+       end)
+      end)
       [ updated_data | new_groups]
     end)
   end
