@@ -70,7 +70,7 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
     Mix.shell().info("--- Creating arke_project for #{id}--- ")
     label = opts[:label] || String.capitalize(id) |> String.replace("_"," ") |> String.trim
     description =  opts[:description] || "Arke for the schema #{id}"
-    now =  Arke.DatetimeHandler.now(:datetime)
+    now =  Arke.Utils.DatetimeHandler.now(:datetime)
     data = %{label: %{value: label, datetime: now },
       description: %{value: description, datetime: now } ,
       type: %{value: "postgres_schema", datetime: now },

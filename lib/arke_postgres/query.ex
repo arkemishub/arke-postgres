@@ -14,7 +14,7 @@
 
 defmodule ArkePostgres.Query do
   import Ecto.Query
-  alias Arke.DatetimeHandler, as: DatetimeHandler
+  alias Arke.Utils.DatetimeHandler, as: DatetimeHandler
 
   @record_fields [:id, :arke_id, :data, :metadata, :inserted_at, :updated_at]
 
