@@ -265,7 +265,7 @@ defmodule ArkePostgres.Query do
         add_condition_to_clause(condition, clause, logic)
       else
         condition =
-          filter_query_by_operator(column, value, operator) |> handle_negate_condition(negate)
+          filter_query_by_operator(parameter, column, value, operator) |> handle_negate_condition(negate)
 
         add_condition_to_clause(condition, clause, logic)
       end
@@ -297,8 +297,12 @@ defmodule ArkePostgres.Query do
 
   defp get_table_column(%{id: id} = _parameter), do: dynamic([q], fragment("?", field(q, ^id)))
 
+  defp get_arke_column(%{id: id, arke_id: :string, data: %{multiple: true}} = _parameter),
+       do: dynamic([q], fragment("(? -> ? ->> 'value')::jsonb", field(q, :data), ^Atom.to_string(id)))
+
   defp get_arke_column(%{id: id, arke_id: :string} = _parameter),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
+
 
   defp get_arke_column(%{id: id, arke_id: :atom} = _parameter),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
@@ -447,32 +451,33 @@ defmodule ArkePostgres.Query do
         fragment("? IS NULL AND (data \\? ?)", ^column, ^Atom.to_string(id))
       )
 
-  defp filter_query_by_operator(column, value, :eq), do: dynamic([q], ^column == ^value)
+  defp filter_query_by_operator(%{arke_id: :string, data: %{multiple: true}}, column, value, :eq), do: dynamic([q], fragment("jsonb_exists(?, ?)", ^column, ^value))
+  defp filter_query_by_operator(parameter, column, value, :eq), do: dynamic([q], ^column == ^value)
 
-  defp filter_query_by_operator(column, value, :contains),
+  defp filter_query_by_operator(parameter, column, value, :contains),
     do: dynamic([q], like(^column, fragment("?", ^("%" <> value <> "%"))))
 
-  defp filter_query_by_operator(column, value, :icontains),
+  defp filter_query_by_operator(parameter, column, value, :icontains),
     do: dynamic([q], ilike(^column, fragment("?", ^("%" <> value <> "%"))))
 
-  defp filter_query_by_operator(column, value, :endswith),
+  defp filter_query_by_operator(parameter, column, value, :endswith),
     do: dynamic([q], like(^column, fragment("?", ^("%" <> value))))
 
-  defp filter_query_by_operator(column, value, :iendswith),
+  defp filter_query_by_operator(parameter, column, value, :iendswith),
     do: dynamic([q], ilike(^column, fragment("?", ^("%" <> value))))
 
-  defp filter_query_by_operator(column, value, :startswith),
+  defp filter_query_by_operator(parameter, column, value, :startswith),
     do: dynamic([q], like(^column, fragment("?", ^(value <> "%"))))
 
-  defp filter_query_by_operator(column, value, :istartswith),
+  defp filter_query_by_operator(parameter, column, value, :istartswith),
     do: dynamic([q], ilike(^column, fragment("?", ^(value <> "%"))))
 
-  defp filter_query_by_operator(column, value, :lte), do: dynamic([q], ^column <= ^value)
-  defp filter_query_by_operator(column, value, :lt), do: dynamic([q], ^column < ^value)
-  defp filter_query_by_operator(column, value, :gt), do: dynamic([q], ^column > ^value)
-  defp filter_query_by_operator(column, value, :gte), do: dynamic([q], ^column >= ^value)
-  defp filter_query_by_operator(column, value, :in), do: dynamic([q], ^column in ^value)
-  defp filter_query_by_operator(column, value, _), do: dynamic([q], ^column == ^value)
+  defp filter_query_by_operator(parameter, column, value, :lte), do: dynamic([q], ^column <= ^value)
+  defp filter_query_by_operator(parameter, column, value, :lt), do: dynamic([q], ^column < ^value)
+  defp filter_query_by_operator(parameter, column, value, :gt), do: dynamic([q], ^column > ^value)
+  defp filter_query_by_operator(parameter, column, value, :gte), do: dynamic([q], ^column >= ^value)
+  defp filter_query_by_operator(parameter, column, value, :in), do: dynamic([q], ^column in ^value)
+  defp filter_query_by_operator(parameter, column, value, _), do: dynamic([q], ^column == ^value)
 
   # defp filter_query_by_operator(query, key, value, "between"), do: from q in query, where: column_table(q, ^key) == ^value
 
