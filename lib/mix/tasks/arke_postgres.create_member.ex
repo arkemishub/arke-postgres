@@ -73,7 +73,7 @@ defmodule Mix.Tasks.ArkePostgres.CreateMember do
         Mix.Tasks.Help.run(["arke_postgres.create_member"])
 
       {data, _opts} ->
-      project = Keyword.fetch!(data,:project,"admin")
+      project = Keyword.fetch!(data,:project)
       username = Keyword.get(data,:username,"admin")
       password = Keyword.get(data,:password)
       check_user(String.to_atom(project),username,password,data)
