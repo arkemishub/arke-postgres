@@ -14,28 +14,28 @@
 
 defmodule ArkePostgres do
   alias Arke.Boundary.{GroupManager, ArkeManager}
-  alias ArkePostgres.{Table, ArkeUnit}
+  alias ArkePostgres.{Table, ArkeUnit, Query}
 
   def init() do
     case check_env() do
       {:ok, nil} ->
         try do
-          projects =
-            Arke.QueryManager.query(arke: :arke_project, project: :arke_system)
-            # |> Arke.QueryManager.filter(:id, :eq, :arke_system, true)
-            |> Arke.QueryManager.filter(:arke_id, :eq, "arke_project")
-            |> Arke.QueryManager.all()
 
+          projects =Query.get_project_record()
           Enum.each(projects, fn %{id: project_id} = _project ->
             start_managers(project_id)
-            get_arke_modules(project_id)
-            get_group_modules(project_id)
           end)
 
           :ok
         rescue
-          _ in DBConnection.ConnectionError -> :error
-          _ in Postgrex.Error -> :error
+          _ in DBConnection.ConnectionError ->
+            IO.inspect("ConnectionError")
+            :error
+          err in Postgrex.Error ->
+            %{message: message,postgres: %{code: code, message: postgres_message}} = err
+            parsed_message = %{context: "postgrex_error", message: "#{message || postgres_message}"}
+            IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+            :error
         end
 
       {:error, keys} ->
@@ -43,71 +43,6 @@ defmodule ArkePostgres do
         :error
     end
   end
-
-  defp get_arke_modules(project) do
-    Enum.reduce(:application.loaded_applications(), [], fn {app, _, _}, arke_list ->
-      {:ok, modules} = :application.get_key(app, :modules)
-
-      module_arke_list =
-        Enum.reduce(modules, [], fn mod, mod_arke_list ->
-          is_arke =
-            Code.ensure_loaded?(mod) and :erlang.function_exported(mod, :arke_from_attr, 0) and
-              mod.arke_from_attr != nil and mod.arke_from_attr.remote == true
-
-          mod_arke_list = check_arke_module(project, mod, mod_arke_list, is_arke)
-        end)
-
-      arke_list ++ module_arke_list
-    end)
-  end
-
-  defp check_arke_module(project, mod, arke_list, true) do
-    %{id: id} = mod.arke_from_attr
-    arke = ArkeManager.get(id, project)
-    update_arke_manager_and_list(arke, arke_list, mod)
-  end
-
-  defp update_arke_manager_and_list(arke, arke_list, _) when is_nil(arke), do: arke_list
-
-  defp update_arke_manager_and_list(arke, arke_list, mod) do
-    ArkeManager.update(arke, Arke.Core.Unit.update(arke, __module__: mod))
-    [mod | arke_list]
-  end
-
-  defp check_arke_module(_, _, arke_list, false), do: arke_list
-
-  defp get_group_modules(project) do
-    Enum.reduce(:application.loaded_applications(), [], fn {app, _, _}, group_list ->
-      {:ok, modules} = :application.get_key(app, :modules)
-
-      module_group_list =
-        Enum.reduce(modules, [], fn mod, mod_group_list ->
-          is_group =
-            Code.ensure_loaded?(mod) and :erlang.function_exported(mod, :is_group?, 0) and
-              mod.group_from_attr != nil and mod.is_group? == true
-
-          mod_group_list = check_group_module(project, mod, mod_group_list, is_group)
-        end)
-
-      group_list ++ module_group_list
-    end)
-  end
-
-  defp check_group_module(project, mod, group_list, true) do
-    %{id: id} = mod.group_from_attr
-    # IO.inspect("Modifica gruppo Gruppo #{id} - #{project}")
-    group = GroupManager.get(id, project)
-    update_group_manager_and_list(group, group_list, mod)
-  end
-
-  defp update_group_manager_and_list(group, group_list, _) when is_nil(group), do: group_list
-
-  defp update_group_manager_and_list(group, group_list, mod) do
-    GroupManager.update(group, Arke.Core.Unit.update(group, __module__: mod))
-    [mod | group_list]
-  end
-
-  defp check_group_module(_, _, group_list, false), do: group_list
 
   def print_missing_env(keys) when is_list(keys) do
     for k <- keys do
@@ -132,32 +67,18 @@ defmodule ArkePostgres do
     end
   end
 
+  defp start_managers(project_id) when is_binary(project_id), do: start_managers(String.to_atom(project_id))
   defp start_managers(project_id) do
-    {parameters, arke_list, groups} = ArkePostgres.Query.get_manager_units(project_id)
+    {parameters, arke_list, groups} = Query.get_manager_units(project_id)
 
-    arke = Arke.Boundary.ArkeManager.get(:arke, :arke_system)
-    Enum.each(parameters, fn unit -> Arke.Boundary.ParameterManager.create(unit, project_id) end)
+    Arke.handle_manager(parameters,project_id,:parameter)
+    Arke.handle_manager(arke_list,project_id,:arke)
+    Arke.handle_manager(groups,project_id,:group)
 
-    Enum.each(arke_list, fn unit ->
-      unit =
-        Arke.Core.Unit.update(unit,
-          parameters: unit.data.parameters ++ Arke.Core.Arke.base_parameters(arke)
-        )
-
-      Arke.Boundary.ArkeManager.create(unit, project_id)
-    end)
-
-    Enum.each(groups, fn unit ->
-      Arke.Boundary.GroupManager.create(
-        Arke.Core.Unit.update(unit, __module__: Arke.System.BaseGroup),
-        project_id
-      )
-    end)
   end
 
   def create(project, %{arke_id: arke_id} = unit) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
-
     case handle_create(project, arke, unit) do
       {:ok, unit} ->
         {:ok,
@@ -190,8 +111,8 @@ defmodule ArkePostgres do
     end
   end
 
-  defp handle_create(_, _, _) do
-    {:ok, "arke type not supported"}
+  defp handle_create(proj, arke, unit) do
+    {:error, "arke type not supported"}
   end
 
   def update(project, %{arke_id: arke_id} = unit) do
@@ -281,6 +202,7 @@ defmodule ArkePostgres do
     Enum.to_list(data)
   end
 
+  defp handle_changeset_errros(errors)when is_binary(errors), do: errors
   defp handle_changeset_errros(errors) do
     Enum.map(errors, fn {field, detail} ->
       "#{field}: #{render_detail(detail)}"

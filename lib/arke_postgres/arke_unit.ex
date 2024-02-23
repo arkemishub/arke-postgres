@@ -102,7 +102,7 @@ defmodule ArkePostgres.ArkeUnit do
     do:
       Map.put_new(data, Atom.to_string(id), %{
         :value => value,
-        :datetime => Arke.DatetimeHandler.now(:datetime)
+        :datetime => Arke.Utils.DatetimeHandler.now(:datetime)
       })
 
   defp update_encoded_unit_data(_, data, _), do: data
@@ -122,8 +122,8 @@ defmodule ArkePostgres.ArkeUnit do
   end
 
   defp pop_datetime(data, key) do
-    {datetime, data} = Map.pop(data, key, Arke.DatetimeHandler.now(:datetime))
-    {datetime || Arke.DatetimeHandler.now(:datetime), data}
+    {datetime, data} = Map.pop(data, key, Arke.Utils.DatetimeHandler.now(:datetime))
+    {datetime || Arke.Utils.DatetimeHandler.now(:datetime), data}
   end
 
   defp pop_map(data, key) do

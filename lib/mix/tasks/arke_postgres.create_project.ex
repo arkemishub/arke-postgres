@@ -44,7 +44,7 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
   def run(args) do
     case ArkePostgres.check_env() do
       {:ok, _} ->
-        [:postgrex, :ecto_sql, :arke]
+        [:postgrex, :ecto_sql]
         |> Enum.each(&Application.ensure_all_started/1)
 
         case ArkePostgres.Repo.start_link() do
@@ -64,14 +64,35 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
   end
 
   defp create_project([{:id, id} | _] = opts) do
-    arke_project = ArkeManager.get(:arke_project, :arke_system)
+    Mix.shell().info("--- Creating schema for #{id}--- ")
+    ArkePostgres.create_project(%{arke_id: :arke_project, id: id})
 
-    QueryManager.create(:arke_system, arke_project,
+    Mix.shell().info("--- Creating arke_project for #{id}--- ")
+    label = opts[:label] || String.capitalize(id) |> String.replace("_"," ") |> String.trim
+    description =  opts[:description] || "Arke for the schema #{id}"
+    now =  Arke.Utils.DatetimeHandler.now(:datetime)
+    data = %{label: %{value: label, datetime: now },
+      description: %{value: description, datetime: now } ,
+      type: %{value: "postgres_schema", datetime: now },
+    persistence: %{value: "arke_parameter", datetime: now }}
+    row = [
       id: id,
-      label: Keyword.get(opts, :label, String.capitalize(id)),
-      description: Keyword.get(opts, :description, "Project #{id}"),
-      type: "postgres_schema"
-    )
+      arke_id: "arke_project",
+      data: data,
+      metadata: %{},
+      inserted_at: now,
+      updated_at:  now
+    ]
+
+    case ArkePostgres.Repo.insert(ArkePostgres.Tables.ArkeUnit.changeset(Enum.into(row, %{})),
+           prefix: "arke_system"
+         ) do
+      {:ok, record} ->
+        {:ok, record}
+
+      {:error, changeset} ->
+        {:error, changeset.errors}
+    end
   end
 
   defp create_project(_) do
@@ -81,9 +102,8 @@ defmodule Mix.Tasks.ArkePostgres.CreateProject do
   end
 
   defp parse_args(args) do
-    {options, _, _} =
-      OptionParser.parse(args, strict: [id: :string, label: :string, description: :string])
-
+    {options, _} =
+      OptionParser.parse!(args, strict: [id: :string, label: :string, description: :string])
     options
   end
 end
