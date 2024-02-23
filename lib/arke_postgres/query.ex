@@ -65,8 +65,10 @@ defmodule ArkePostgres.Query do
     parameter_links = Enum.filter(links, fn x -> x.type == "parameter" end)
     group_links = Enum.filter(links, fn x -> x.type == "group" end)
 
+
     parameters_id = [
       "boolean",
+      "binary",
       "dict",
       "list",
       "float",
