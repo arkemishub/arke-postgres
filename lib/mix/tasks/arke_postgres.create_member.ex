@@ -75,7 +75,7 @@ defmodule Mix.Tasks.ArkePostgres.CreateMember do
       {data, _opts} ->
       project = Keyword.fetch!(data,:project)
       username = Keyword.get(data,:username,"admin")
-      password = Keyword.get(data,:password)
+      password = Keyword.get(data,:password,"admin")
       check_user(String.to_atom(project),username,password,data)
 
       end
@@ -92,7 +92,6 @@ defmodule Mix.Tasks.ArkePostgres.CreateMember do
     user_model = ArkeManager.get(:user, :arke_system)
     email = Keyword.get(opts,:email,"#{username}@bar.com")
     data = %{username: username,password: password,email: email,type: "super_admin"}
-
     with {:ok,user} <- QueryManager.create(:arke_system, user_model,data),
          {:ok,_member} <- create_member(project_id,user)  do
       IO.inspect("member #{username} created",syntax_colors: [string: :cyan])
