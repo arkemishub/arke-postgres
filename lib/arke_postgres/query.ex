@@ -299,7 +299,7 @@ defmodule ArkePostgres.Query do
 
   defp get_table_column(%{id: id} = _parameter), do: dynamic([q], fragment("?", field(q, ^id)))
 
-  defp get_arke_column(%{id: id, arke_id: :string, data: %{multiple: true}} = _parameter),
+  defp get_arke_column(%{id: id, data: %{multiple: true}} = _parameter),
        do: dynamic([q], fragment("(? -> ? ->> 'value')::jsonb", field(q, :data), ^Atom.to_string(id)))
 
   defp get_arke_column(%{id: id, arke_id: :string} = _parameter),
@@ -453,7 +453,7 @@ defmodule ArkePostgres.Query do
         fragment("? IS NULL AND (data \\? ?)", ^column, ^Atom.to_string(id))
       )
 
-  defp filter_query_by_operator(%{arke_id: :string, data: %{multiple: true}}, column, value, :eq), do: dynamic([q], fragment("jsonb_exists(?, ?)", ^column, ^value))
+  defp filter_query_by_operator(%{data: %{multiple: true}}, column, value, :eq), do: dynamic([q], fragment("jsonb_exists(?, ?)", ^column, ^value))
   defp filter_query_by_operator(parameter, column, value, :eq), do: dynamic([q], ^column == ^value)
 
   defp filter_query_by_operator(parameter, column, value, :contains),
