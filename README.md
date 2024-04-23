@@ -1,6 +1,6 @@
 # ArkePostgres
 
-![Postgress](https://user-images.githubusercontent.com/81776297/233304366-8129d0e6-1f89-4048-9930-bf47d174ffc1.png)
+![Postgress](https://github.com/arkemishub/arke-postgres/assets/81776297/adc5e8e4-cab2-44a5-9177-2ced28a3dfbc)
 
 ## Installation
 
