@@ -174,16 +174,26 @@ defmodule ArkePostgres.Query do
 
   defp base_query(%{link: nil} = _arke_query, action), do: arke_query(action)
 
-  defp base_query(%{link: link, project: project} = _arke_query, action),
+  defp base_query(%{link: %{unit: %{id: link_id},depth: depth, direction: direction,type: type}, project: project} = _arke_query, action),
     do:
       get_nodes(
         project,
         action,
-        Atom.to_string(link.unit.id),
-        link.depth,
-        link.direction,
-        link.type
+        [to_string(link_id)],
+        depth,
+        direction,
+        type
       )
+  defp base_query(%{link: %{unit: unit_list,depth: depth, direction: direction,type: type}, project: project} = _arke_query, action) when is_list(unit_list) do
+    get_nodes(
+      project,
+      action,
+      Enum.map(unit_list, fn unit -> to_string(unit.id) end),
+      depth,
+      direction,
+      type
+    )
+  end
 
   defp base_query(), do: from("arke_unit", select: ^@record_fields)
 
@@ -490,7 +500,7 @@ defmodule ArkePostgres.Query do
   @raw_cte_child_query """
   (
     WITH RECURSIVE tree(depth, parent_id, type, child_id, metadata) AS (
-      SELECT 0, parent_id, type, child_id, metadata FROM ?.arke_link WHERE ? = ?
+      SELECT 0, parent_id, type, child_id, metadata FROM ?.arke_link WHERE ? = ANY(?)
       UNION SELECT
         depth + 1,
         ?.arke_link.parent_id,
@@ -526,18 +536,13 @@ defmodule ArkePostgres.Query do
   )
   """
 
-  #  def get_nodes(project, :count, unit_id, depth, direction) do
-  #      from a in "arke_unit",
-  #           left_join: cte in fragment(@raw_cte_child_query, literal(^Atom.to_string(project)), literal(^"parent_id"), ^unit_id, literal(^"parent_id"), literal(^"child_id"), ^depth),
-  #           where: a.id == cte.child_id,
-  #           select: count("*")
-  #  end
-  def get_nodes(project, action, unit_id, depth, direction, type) do
+  def get_nodes(project, action, unit_id, depth, direction, type) when is_list(unit_id) do
     project = get_project(project)
     {link_field, tree_field} = get_fields_by_direction(direction)
     where_field = get_where_field_by_direction(direction) |> get_where_condition_by_type(type)
     get_link_query(action, project, unit_id, link_field, tree_field, depth, where_field)
   end
+  def get_nodes(project, action, unit_id, depth, direction, type), do:  get_nodes(project, action, [unit_id], depth, direction, type)
 
   defp get_project(project) when is_atom(project), do: Atom.to_string(project)
   defp get_project(project), do: project
@@ -558,14 +563,14 @@ defmodule ArkePostgres.Query do
   defp get_where_field_by_direction(:parent),
     do: dynamic([a, cte], a.id == fragment("?", field(cte, ^:parent_id)))
 
-  defp get_link_query(:count, project, unit_id, link_field, tree_field, depth, where_field) do
+  defp get_link_query(:count, project, unit_id_list, link_field, tree_field, depth, where_field) do
     from(a in "arke_unit",
       left_join:
         cte in fragment(
           @raw_cte_child_query,
           literal(^project),
           literal(^link_field),
-          ^unit_id,
+          ^unit_id_list,
           literal(^project),
           literal(^project),
           literal(^project),
@@ -581,14 +586,14 @@ defmodule ArkePostgres.Query do
     )
   end
 
-  defp get_link_query(_action, project, unit_id, link_field, tree_field, depth, where_field) do
+  defp get_link_query(_action, project, unit_id_list, link_field, tree_field, depth, where_field) do
     from(a in "arke_unit",
       left_join:
         cte in fragment(
           @raw_cte_child_query,
           literal(^project),
           literal(^link_field),
-          ^unit_id,
+          ^unit_id_list,
           literal(^project),
           literal(^project),
           literal(^project),
@@ -614,5 +619,4 @@ defmodule ArkePostgres.Query do
     )
   end
 
-  #  defp get_select_by_action(_action), do: dynamic([a, cte], merge(map(a, [:id, :arke_id, :data, :metadata, :inserted_at, :updated_at]), map(cte, [:depth, :metadata, :type])))
 end
