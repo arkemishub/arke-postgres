@@ -66,23 +66,9 @@ defmodule ArkePostgres.Query do
     group_links = Enum.filter(links, fn x -> x.type == "group" end)
 
 
-    parameters_id = [
-      "boolean",
-      "binary",
-      "dict",
-      "list",
-      "float",
-      "integer",
-      "string",
-      "unit",
-      "link",
-      "dynamic",
-      "date",
-      "datetime",
-      "time"
-    ]
+    parameters_id = Arke.Utils.DefaultData.get_parameters_id()
 
-    list_arke_id = parameters_id ++ ["arke", "group"]
+    list_arke_id = Arke.Utils.DefaultData.get_arke_id()
 
     unit_list =
       from(q in base_query(), where: q.arke_id in ^list_arke_id)
