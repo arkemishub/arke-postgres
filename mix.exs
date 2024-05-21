@@ -1,7 +1,7 @@
 defmodule ArkePostgres.MixProject do
   use Mix.Project
 
-  @version "0.3.1"
+  @version "0.3.2"
   @scm_url "https://github.com/arkemishub/arke-postgres"
   @site_url "https://arkehub.com"
 
@@ -40,7 +40,7 @@ defmodule ArkePostgres.MixProject do
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.10", only: :test},
-      {:arke, "~> 0.3.0"}
+      {:arke, "~> 0.3.2"}
     ])
   end
 
