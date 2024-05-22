@@ -551,12 +551,12 @@ defmodule ArkePostgres.Query do
           ^depth
         ),
       where: ^where_field,
-      select: count("*")
+      select: count(a.id, :distinct)
     )
   end
 
   defp get_link_query(_action, project, unit_id_list, link_field, tree_field, depth, where_field) do
-    from(a in "arke_unit",
+    q = from(r in from(a in "arke_unit",
       left_join:
         cte in fragment(
           @raw_cte_query,
@@ -575,6 +575,7 @@ defmodule ArkePostgres.Query do
           ^depth
         ),
       where: ^where_field,
+      distinct: a.id,
       select: %{
         id: a.id,
         arke_id: a.arke_id,
@@ -587,7 +588,8 @@ defmodule ArkePostgres.Query do
         link_type: cte.type,
         starting_unit: cte.starting_unit
       }
-    )
+    ))
+    from x in subquery(q), select: x
   end
 
 end
