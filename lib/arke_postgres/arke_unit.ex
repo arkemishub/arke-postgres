@@ -19,24 +19,51 @@ defmodule ArkePostgres.ArkeUnit do
 
   @record_fields [:id, :data, :metadata, :inserted_at, :updated_at]
 
-  def insert(project, arke, %{data: data} = unit) do
-    row = [
-      id: handle_id(unit.id),
-      arke_id: Atom.to_string(unit.arke_id),
-      data: encode_unit_data(arke, data),
-      metadata: unit.metadata,
-      inserted_at: unit.inserted_at,
-      updated_at: unit.updated_at
-    ]
+  def insert(project, arke, unit_list) do
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
-    case ArkePostgres.Repo.insert(ArkePostgres.Tables.ArkeUnit.changeset(Enum.into(row, %{})),
-           prefix: project
-         ) do
-      {:ok, record} ->
-        {:ok, record}
+    %{unit_list: updated_unit_list, records: records} =
+      Enum.reduce(unit_list, %{unit_list: [], records: []}, fn unit, acc ->
+        id = handle_id(unit.id)
 
-      {:error, changeset} ->
-        {:error, changeset.errors}
+        updated_unit =
+          unit |> Map.put(:id, id) |> Map.put(:inserted_at, now) |> Map.put(:updated_at, now)
+
+        acc
+        |> Map.put(:unit_list, [updated_unit | acc.unit_list])
+        |> Map.put(:records, [
+          %{
+            id: id,
+            arke_id: Atom.to_string(unit.arke_id),
+            data: encode_unit_data(arke, unit.data),
+            metadata: unit.metadata,
+            inserted_at: now,
+            updated_at: now
+          }
+          | acc.records
+        ])
+      end)
+
+    case(
+      ArkePostgres.Repo.insert_all(
+        ArkePostgres.Tables.ArkeUnit,
+        records,
+        prefix: project,
+        returning: true
+      )
+    ) do
+      {0, _} ->
+        {:error, Error.create(:insert, "no records inserted"), nil}
+
+      {_, inserted} ->
+        inserted_ids = Enum.map(inserted, & &1.id)
+
+        {valid, errors} =
+          Enum.split_with(updated_unit_list, fn unit ->
+            unit.id in inserted_ids
+          end)
+
+        {:ok, inserted, valid, errors}
     end
   end
 

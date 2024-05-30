@@ -20,8 +20,8 @@ defmodule ArkePostgres do
     case check_env() do
       {:ok, nil} ->
         try do
+          projects = Query.get_project_record()
 
-          projects =Query.get_project_record()
           Enum.each(projects, fn %{id: project_id} = _project ->
             start_managers(project_id)
           end)
@@ -31,10 +31,16 @@ defmodule ArkePostgres do
           _ in DBConnection.ConnectionError ->
             IO.inspect("ConnectionError")
             :error
+
           err in Postgrex.Error ->
-            %{message: message,postgres: %{code: code, message: postgres_message}} = err
-            parsed_message = %{context: "postgrex_error", message: "#{message || postgres_message}"}
-            IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+            %{message: message, postgres: %{code: code, message: postgres_message}} = err
+
+            parsed_message = %{
+              context: "postgrex_error",
+              message: "#{message || postgres_message}"
+            }
+
+            IO.inspect(parsed_message, syntax_colors: [string: :red, atom: :cyan])
             :error
         end
 
@@ -67,46 +73,60 @@ defmodule ArkePostgres do
     end
   end
 
-  defp start_managers(project_id) when is_binary(project_id), do: start_managers(String.to_atom(project_id))
+  defp start_managers(project_id) when is_binary(project_id),
+    do: start_managers(String.to_atom(project_id))
+
   defp start_managers(project_id) do
     {parameters, arke_list, groups} = Query.get_manager_units(project_id)
 
-    Arke.handle_manager(parameters,project_id,:parameter)
-    Arke.handle_manager(arke_list,project_id,:arke)
-    Arke.handle_manager(groups,project_id,:group)
-
+    Arke.handle_manager(parameters, project_id, :parameter)
+    Arke.handle_manager(arke_list, project_id, :arke)
+    Arke.handle_manager(groups, project_id, :group)
   end
 
-  def create(project, %{arke_id: arke_id} = unit) do
+  def create(project, unit, opts \\ [])
+
+  def create(project, %{arke_id: arke_id} = unit, opts),
+    do: create(project, [unit], opts)
+
+  def create(_, [], opts), do: get_operation_result([], [], opts[:bulk])
+
+  def create(project, [%{arke_id: arke_id} | _] = unit_list, opts) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
-    case handle_create(project, arke, unit) do
-      {:ok, unit} ->
-        {:ok,
-         Arke.Core.Unit.update(unit, metadata: Map.merge(unit.metadata, %{project: project}))}
+
+    case handle_create(project, arke, unit_list) do
+      {:ok, valid, errors} ->
+        get_operation_result(
+          Enum.map(valid, fn unit ->
+            Arke.Core.Unit.update(unit, metadata: Map.merge(unit.metadata, %{project: project}))
+          end),
+          errors,
+          opts[:bulk]
+        )
 
       {:error, errors} ->
-        {:error, handle_changeset_errros(errors)}
+        {:error, errors}
     end
   end
 
   defp handle_create(
          project,
          %{data: %{type: "table"}} = arke,
-         %{data: data, metadata: metadata} = unit
+         [%{data: data, metadata: metadata} = unit | _] = _
        ) do
+    # todo: handle bulk?
     # todo: remove once the project is not needed anymore
     data = data |> Map.merge(%{metadata: Map.delete(metadata, :project)}) |> data_as_klist
     Table.insert(project, arke, data)
-    {:ok, unit}
+    {:ok, [unit], []}
   end
 
-  defp handle_create(project, %{data: %{type: "arke"}} = arke, unit) do
-    case ArkeUnit.insert(project, arke, unit) do
-      {:ok, %{id: id, inserted_at: inserted_at, updated_at: updated_at}} ->
-        {:ok,
-         Arke.Core.Unit.update(unit, id: id, inserted_at: inserted_at, updated_at: updated_at)}
+  defp handle_create(project, %{data: %{type: "arke"}} = arke, unit_list) do
+    case ArkeUnit.insert(project, arke, unit_list) do
+      {:ok, records, valid, errors} ->
+        {:ok, valid, errors}
 
-      {:error, errors} ->
+      {:error, errors, _, _} ->
         {:error, errors}
     end
   end
@@ -115,7 +135,10 @@ defmodule ArkePostgres do
     {:error, "arke type not supported"}
   end
 
-  def update(project, %{arke_id: arke_id} = unit) do
+  defp get_operation_result(valid, errors, true), do: {:ok, valid, errors}
+  defp get_operation_result(valid, errors, _), do: {:ok, List.first(valid)}
+
+  def update(project, %{arke_id: arke_id} = unit, opts \\ []) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
     {:ok, unit} = handle_update(project, arke, unit)
   end
@@ -147,7 +170,7 @@ defmodule ArkePostgres do
     {:error, "arke type not supported"}
   end
 
-  def delete(project, %{arke_id: arke_id} = unit) do
+  def delete(project, %{arke_id: arke_id} = unit, opts \\ []) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
     handle_delete(project, arke, unit)
   end
@@ -200,13 +223,6 @@ defmodule ArkePostgres do
 
   def data_as_klist(data) do
     Enum.to_list(data)
-  end
-
-  defp handle_changeset_errros(errors)when is_binary(errors), do: errors
-  defp handle_changeset_errros(errors) do
-    Enum.map(errors, fn {field, detail} ->
-      "#{field}: #{render_detail(detail)}"
-    end)
   end
 
   defp render_detail({message, values}) do
