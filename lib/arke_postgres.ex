@@ -135,19 +135,35 @@ defmodule ArkePostgres do
     {:error, "arke type not supported"}
   end
 
-  defp get_operation_result(valid, errors, true), do: {:ok, valid, errors}
-  defp get_operation_result(valid, errors, _), do: {:ok, List.first(valid)}
+  def update(project, unit, opts \\ [])
 
-  def update(project, %{arke_id: arke_id} = unit, opts \\ []) do
+  def update(project, %{arke_id: arke_id} = unit, opts),
+    do: update(project, [unit], opts)
+
+  def update(_, [], opts), do: get_operation_result([], [], opts[:bulk])
+
+  def update(project, [%{arke_id: arke_id} | _] = unit_list, opts) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
-    {:ok, unit} = handle_update(project, arke, unit)
+
+    case handle_update(project, arke, unit_list) do
+      {:ok, valid, errors} ->
+        get_operation_result(
+          valid,
+          errors,
+          opts[:bulk]
+        )
+
+      {:error, errors} ->
+        {:error, errors}
+    end
   end
 
   def handle_update(
         project,
         %{data: %{type: "table"}} = arke,
-        %{data: data, metadata: metadata} = unit
+        [%{data: data, metadata: metadata} = unit | _] = _
       ) do
+    # todo: handle bulk?
     data =
       unit
       |> filter_primary_keys(false)
@@ -161,14 +177,22 @@ defmodule ArkePostgres do
     {:ok, unit}
   end
 
-  def handle_update(project, %{data: %{type: "arke"}} = arke, unit) do
-    ArkeUnit.update(project, arke, unit)
-    {:ok, unit}
+  def handle_update(project, %{data: %{type: "arke"}} = arke, unit_list) do
+    case ArkeUnit.update(project, arke, unit_list) do
+      {:ok, records, valid, errors} ->
+        {:ok, valid, errors}
+
+      {:error, errors, _, _} ->
+        {:error, errors}
+    end
   end
 
   def handle_update(_, _, _) do
     {:error, "arke type not supported"}
   end
+
+  defp get_operation_result(valid, errors, true), do: {:ok, valid, errors}
+  defp get_operation_result(valid, errors, _), do: {:ok, List.first(valid)}
 
   def delete(project, %{arke_id: arke_id} = unit, opts \\ []) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)

@@ -73,18 +73,40 @@ defmodule ArkePostgres.ArkeUnit do
   # TODO handle error
   defp handle_id(id), do: id
 
-  def update(project, arke, %{data: data} = unit, where \\ []) do
-    where = Keyword.put_new(where, :arke_id, Atom.to_string(unit.arke_id))
-    where = Keyword.put_new(where, :id, Atom.to_string(unit.id))
+  def update(project, arke, unit_list) do
+    records =
+      Enum.map(unit_list, fn unit ->
+        %{
+          id: to_string(unit.id),
+          arke_id: to_string(arke.id),
+          data: encode_unit_data(arke, unit.data),
+          metadata: Map.delete(unit.metadata, :project),
+          inserted_at: DateTime.to_naive(unit.inserted_at) |> NaiveDateTime.truncate(:second),
+          updated_at: DateTime.to_naive(unit.updated_at)
+        }
+      end)
 
-    row = [
-      data: encode_unit_data(arke, data),
-      metadata: Map.delete(unit.metadata, :project),
-      updated_at: unit.updated_at
-    ]
+    case ArkePostgres.Repo.insert_all(
+           ArkePostgres.Tables.ArkeUnit,
+           records,
+           prefix: project,
+           on_conflict: {:replace_all_except, [:id]},
+           conflict_target: :id,
+           returning: true
+         ) do
+      {0, _} ->
+        {:error, Error.create(:insert, "no records inserted"), nil}
 
-    query = from("arke_unit", where: ^where, update: [set: ^row])
-    ArkePostgres.Repo.update_all(query, [], prefix: project)
+      {_, updated} ->
+        updated_ids = Enum.map(updated, & &1.id)
+
+        {valid, errors} =
+          Enum.split_with(unit_list, fn unit ->
+            to_string(unit.id) in updated_ids
+          end)
+
+        {:ok, updated, valid, errors}
+    end
   end
 
   def delete(project, arke, unit) do
