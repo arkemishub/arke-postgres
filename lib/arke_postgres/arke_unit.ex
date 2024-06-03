@@ -109,9 +109,12 @@ defmodule ArkePostgres.ArkeUnit do
     end
   end
 
-  def delete(project, arke, unit) do
-    where = [arke_id: Atom.to_string(arke.id), id: Atom.to_string(unit.id)]
-    query = from(a in "arke_unit", where: ^where)
+  def delete(project, arke, unit_list) do
+    query =
+      from(a in "arke_unit",
+        where: a.arke_id == ^Atom.to_string(arke.id),
+        where: a.id in ^Enum.map(unit_list, &Atom.to_string(&1.id))
+      )
 
     case ArkePostgres.Repo.delete_all(query, prefix: project) do
       {0, nil} ->

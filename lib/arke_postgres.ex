@@ -194,12 +194,34 @@ defmodule ArkePostgres do
   defp get_operation_result(valid, errors, true), do: {:ok, valid, errors}
   defp get_operation_result(valid, errors, _), do: {:ok, List.first(valid)}
 
-  def delete(project, %{arke_id: arke_id} = unit, opts \\ []) do
+  def delete(project, unit, opts \\ [])
+
+  def delete(project, %{arke_id: arke_id} = unit, opts), do: delete(project, [unit], opts)
+
+  def delete(project, [], opts), do: get_operation_result([], [], opts[:bulk])
+
+  def delete(project, [%{arke_id: arke_id} | _] = unit_list, opts) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
-    handle_delete(project, arke, unit)
+
+    case handle_delete(project, arke, unit_list) do
+      {:ok, valid, errors} ->
+        get_operation_result(
+          valid,
+          errors,
+          opts[:bulk]
+        )
+
+      {:error, errors} ->
+        {:error, errors}
+    end
   end
 
-  defp handle_delete(project, %{data: %{type: "table"}} = arke, %{metadata: metadata} = unit) do
+  defp handle_delete(
+         project,
+         %{data: %{type: "table"}} = arke,
+         [%{metadata: metadata} = unit | _] = _
+       ) do
+    # todo: handle bulk?
     metadata = Map.delete(metadata, :project)
 
     where = unit |> filter_primary_keys(true) |> Map.put_new(:metadata, metadata) |> data_as_klist
@@ -210,9 +232,9 @@ defmodule ArkePostgres do
     end
   end
 
-  defp handle_delete(project, %{data: %{type: "arke"}} = arke, unit) do
-    case ArkeUnit.delete(project, arke, unit) do
-      {:ok, _} -> {:ok, nil}
+  defp handle_delete(project, %{data: %{type: "arke"}} = arke, unit_list) do
+    case ArkeUnit.delete(project, arke, unit_list) do
+      {:ok, _} -> {:ok, unit_list, []}
       {:error, msg} -> {:error, msg}
     end
   end
