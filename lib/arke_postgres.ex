@@ -89,20 +89,21 @@ defmodule ArkePostgres do
   def create(project, %{arke_id: arke_id} = unit, opts),
     do: create(project, [unit], opts)
 
-  def create(_, [], opts), do: get_operation_result([], [], opts[:bulk])
+  def create(_project, [], _opts), do: {:ok, 0, [], []}
 
   def create(project, [%{arke_id: arke_id} | _] = unit_list, opts) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
 
-    case handle_create(project, arke, unit_list) do
-      {:ok, valid, errors} ->
-        get_operation_result(
-          Enum.map(valid, fn unit ->
-            Arke.Core.Unit.update(unit, metadata: Map.merge(unit.metadata, %{project: project}))
-          end),
-          errors,
-          opts[:bulk]
-        )
+    case handle_create(project, arke, unit_list, opts) do
+      {:ok, unit} ->
+        {:ok,
+         Arke.Core.Unit.update(unit, metadata: Map.merge(unit.metadata, %{project: project}))}
+
+      {:ok, count, valid, errors} ->
+        {:ok, count,
+         Enum.map(valid, fn unit ->
+           Arke.Core.Unit.update(unit, metadata: Map.merge(unit.metadata, %{project: project}))
+         end), errors}
 
       {:error, errors} ->
         {:error, errors}
@@ -112,26 +113,20 @@ defmodule ArkePostgres do
   defp handle_create(
          project,
          %{data: %{type: "table"}} = arke,
-         [%{data: data, metadata: metadata} = unit | _] = _
+         [%{data: data, metadata: metadata} = unit | _] = _,
+         _opts
        ) do
     # todo: handle bulk?
     # todo: remove once the project is not needed anymore
     data = data |> Map.merge(%{metadata: Map.delete(metadata, :project)}) |> data_as_klist
     Table.insert(project, arke, data)
-    {:ok, [unit], []}
+    {:ok, unit}
   end
 
-  defp handle_create(project, %{data: %{type: "arke"}} = arke, unit_list) do
-    case ArkeUnit.insert(project, arke, unit_list) do
-      {:ok, records, valid, errors} ->
-        {:ok, valid, errors}
+  defp handle_create(project, %{data: %{type: "arke"}} = arke, unit_list, opts),
+    do: ArkeUnit.insert(project, arke, unit_list, opts)
 
-      {:error, errors, _, _} ->
-        {:error, errors}
-    end
-  end
-
-  defp handle_create(proj, arke, unit) do
+  defp handle_create(_project, _arke, _unit, _opts) do
     {:error, "arke type not supported"}
   end
 
@@ -140,28 +135,18 @@ defmodule ArkePostgres do
   def update(project, %{arke_id: arke_id} = unit, opts),
     do: update(project, [unit], opts)
 
-  def update(_, [], opts), do: get_operation_result([], [], opts[:bulk])
+  def update(_project, [], _opts), do: {:ok, 0, [], []}
 
   def update(project, [%{arke_id: arke_id} | _] = unit_list, opts) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
-
-    case handle_update(project, arke, unit_list) do
-      {:ok, valid, errors} ->
-        get_operation_result(
-          valid,
-          errors,
-          opts[:bulk]
-        )
-
-      {:error, errors} ->
-        {:error, errors}
-    end
+    handle_update(project, arke, unit_list, opts)
   end
 
   def handle_update(
         project,
         %{data: %{type: "table"}} = arke,
-        [%{data: data, metadata: metadata} = unit | _] = _
+        [%{data: data, metadata: metadata} = unit | _] = _,
+        _opts
       ) do
     # todo: handle bulk?
     data =
@@ -177,17 +162,10 @@ defmodule ArkePostgres do
     {:ok, unit}
   end
 
-  def handle_update(project, %{data: %{type: "arke"}} = arke, unit_list) do
-    case ArkeUnit.update(project, arke, unit_list) do
-      {:ok, records, valid, errors} ->
-        {:ok, valid, errors}
+  def handle_update(project, %{data: %{type: "arke"}} = arke, unit_list, opts),
+    do: ArkeUnit.update(project, arke, unit_list, opts)
 
-      {:error, errors, _, _} ->
-        {:error, errors}
-    end
-  end
-
-  def handle_update(_, _, _) do
+  def handle_update(_project, _arke, _unit, _opts) do
     {:error, "arke type not supported"}
   end
 

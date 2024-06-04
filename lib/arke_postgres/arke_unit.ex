@@ -19,7 +19,7 @@ defmodule ArkePostgres.ArkeUnit do
 
   @record_fields [:id, :data, :metadata, :inserted_at, :updated_at]
 
-  def insert(project, arke, unit_list) do
+  def insert(project, arke, unit_list, opts \\ []) do
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     %{unit_list: updated_unit_list, records: records} =
@@ -53,9 +53,9 @@ defmodule ArkePostgres.ArkeUnit do
       )
     ) do
       {0, _} ->
-        {:error, Error.create(:insert, "no records inserted"), nil}
+        {:error, Error.create(:insert, "no records inserted")}
 
-      {_, inserted} ->
+      {count, inserted} ->
         inserted_ids = Enum.map(inserted, & &1.id)
 
         {valid, errors} =
@@ -63,7 +63,10 @@ defmodule ArkePostgres.ArkeUnit do
             unit.id in inserted_ids
           end)
 
-        {:ok, inserted, valid, errors}
+        case opts[:bulk] do
+          true -> {:ok, count, valid, errors}
+          _ -> {:ok, List.first(valid)}
+        end
     end
   end
 
@@ -73,7 +76,7 @@ defmodule ArkePostgres.ArkeUnit do
   # TODO handle error
   defp handle_id(id), do: id
 
-  def update(project, arke, unit_list) do
+  def update(project, arke, unit_list, opts) do
     records =
       Enum.map(unit_list, fn unit ->
         %{
@@ -95,9 +98,9 @@ defmodule ArkePostgres.ArkeUnit do
            returning: true
          ) do
       {0, _} ->
-        {:error, Error.create(:insert, "no records inserted"), nil}
+        {:error, Error.create(:update, "no records updated")}
 
-      {_, updated} ->
+      {count, updated} ->
         updated_ids = Enum.map(updated, & &1.id)
 
         {valid, errors} =
@@ -105,7 +108,10 @@ defmodule ArkePostgres.ArkeUnit do
             to_string(unit.id) in updated_ids
           end)
 
-        {:ok, updated, valid, errors}
+        case opts[:bulk] do
+          true -> {:ok, count, valid, errors}
+          _ -> {:ok, List.first(valid)}
+        end
     end
   end
 
