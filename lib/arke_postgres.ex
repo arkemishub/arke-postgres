@@ -169,29 +169,15 @@ defmodule ArkePostgres do
     {:error, "arke type not supported"}
   end
 
-  defp get_operation_result(valid, errors, true), do: {:ok, valid, errors}
-  defp get_operation_result(valid, errors, _), do: {:ok, List.first(valid)}
-
   def delete(project, unit, opts \\ [])
 
   def delete(project, %{arke_id: arke_id} = unit, opts), do: delete(project, [unit], opts)
 
-  def delete(project, [], opts), do: get_operation_result([], [], opts[:bulk])
+  def delete(project, [], opts), do: {:ok, nil}
 
   def delete(project, [%{arke_id: arke_id} | _] = unit_list, opts) do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
-
-    case handle_delete(project, arke, unit_list) do
-      {:ok, valid, errors} ->
-        get_operation_result(
-          valid,
-          errors,
-          opts[:bulk]
-        )
-
-      {:error, errors} ->
-        {:error, errors}
-    end
+    handle_delete(project, arke, unit_list)
   end
 
   defp handle_delete(
@@ -211,10 +197,7 @@ defmodule ArkePostgres do
   end
 
   defp handle_delete(project, %{data: %{type: "arke"}} = arke, unit_list) do
-    case ArkeUnit.delete(project, arke, unit_list) do
-      {:ok, _} -> {:ok, unit_list, []}
-      {:error, msg} -> {:error, msg}
-    end
+    ArkeUnit.delete(project, arke, unit_list)
   end
 
   defp handle_delete(_, _, _) do
