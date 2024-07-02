@@ -239,7 +239,7 @@ defmodule ArkePostgres.Query do
     Arke.Core.Unit.load(arke, record)
   end
 
-  defp handle_filters(query, filters) do
+  def handle_filters(query, filters) do
     Enum.reduce(filters, query, fn %{logic: logic, negate: negate, base_filters: base_filters},
                                    new_query ->
       clause = handle_condition(logic, base_filters) |> handle_negate_condition(negate)
