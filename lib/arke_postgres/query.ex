@@ -492,38 +492,20 @@ defmodule ArkePostgres.Query do
   # ARKE LINK ##########################################################################################################
   ######################################################################################################################
 
-  @raw_cte_child_query """
+  @raw_cte_query """
   (
-    WITH RECURSIVE tree(depth, parent_id, type, child_id, metadata) AS (
-      SELECT 0, parent_id, type, child_id, metadata FROM ?.arke_link WHERE ? = ANY(?)
+    WITH RECURSIVE tree(depth, parent_id, type, child_id, metadata, starting_unit) AS (
+      SELECT 0, parent_id, type, child_id, metadata, ? FROM ?.arke_link WHERE ? = ANY(?)
       UNION SELECT
         depth + 1,
         ?.arke_link.parent_id,
         ?.arke_link.type,
         ?.arke_link.child_id,
-        ?.arke_link.metadata
+        ?.arke_link.metadata,
+        tree.starting_unit
       FROM
         ?.arke_link JOIN tree
         ON ?.arke_link.? = tree.?
-      WHERE
-       depth < ?
-    )
-    SELECT * FROM tree ORDER BY depth
-  )
-  """
-  @raw_cte_parent_query """
-  (
-    WITH RECURSIVE tree(depth, parent_id, type, child_id, metadata) AS (
-      SELECT 0, parent_id, type, child_id, metadata FROM arke_link WHERE child_id = ?
-      UNION SELECT
-        depth + 1,
-        arke_link.parent_id,
-        arke_link.type,
-        arke_link.child_id,
-        arke_link.metadata
-      FROM
-        arke_link JOIN tree
-        ON arke_link.child_id = tree.parent_id
       WHERE
        depth < ?
     )
@@ -568,7 +550,8 @@ defmodule ArkePostgres.Query do
     from(a in "arke_unit",
       left_join:
         cte in fragment(
-          @raw_cte_child_query,
+          @raw_cte_query,
+          literal(^link_field),
           literal(^project),
           literal(^link_field),
           ^unit_id_list,
@@ -583,7 +566,7 @@ defmodule ArkePostgres.Query do
           ^depth
         ),
       where: ^where_field,
-      select: count(a.id, :distinct)
+      select: count([a.id, cte.starting_unit], :distinct)
     )
   end
 
@@ -591,7 +574,8 @@ defmodule ArkePostgres.Query do
     q = from(a in "arke_unit",
       left_join:
         cte in fragment(
-          @raw_cte_child_query,
+          @raw_cte_query,
+          literal(^link_field),
           literal(^project),
           literal(^link_field),
           ^unit_id_list,
@@ -606,7 +590,7 @@ defmodule ArkePostgres.Query do
           ^depth
         ),
       where: ^where_field,
-      distinct: a.id,
+      distinct: [a.id, cte.starting_unit],
       select: %{
         id: a.id,
         arke_id: a.arke_id,
@@ -617,7 +601,8 @@ defmodule ArkePostgres.Query do
         depth: cte.depth,
         link_metadata: cte.metadata,
         link_before_node: cte.parent_id,
-        link_type: cte.type
+        link_type: cte.type,
+        starting_unit: cte.starting_unit
       }
     )
     from x in subquery(q), select: x
