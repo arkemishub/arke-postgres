@@ -221,9 +221,9 @@ defmodule ArkePostgres.Query do
     end)
   end
 
-  defp init_unit(nil, _, _), do: nil
+  def init_unit(nil, _, _), do: nil
 
-  defp init_unit(record, arke, project) do
+  def init_unit(record, arke, project) do
     arke = get_arke(project, record, arke)
     {metadata, record} = Map.pop(record, :metadata)
     {record_data, record} = Map.pop(record, :data, %{})
@@ -239,7 +239,7 @@ defmodule ArkePostgres.Query do
     Arke.Core.Unit.load(arke, record)
   end
 
-  defp handle_filters(query, filters) do
+  def handle_filters(query, filters) do
     Enum.reduce(filters, query, fn %{logic: logic, negate: negate, base_filters: base_filters},
                                    new_query ->
       clause = handle_condition(logic, base_filters) |> handle_negate_condition(negate)
