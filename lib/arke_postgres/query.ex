@@ -551,7 +551,7 @@ defmodule ArkePostgres.Query do
           ^depth
         ),
       where: ^where_field,
-      select: count(a.id, :distinct)
+      select: count([a.id, cte.starting_unit], :distinct)
     )
   end
 
@@ -575,7 +575,7 @@ defmodule ArkePostgres.Query do
           ^depth
         ),
       where: ^where_field,
-      distinct: a.id,
+      distinct: [a.id, cte.starting_unit],
       select: %{
         id: a.id,
         arke_id: a.arke_id,
