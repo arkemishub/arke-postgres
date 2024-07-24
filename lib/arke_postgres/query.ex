@@ -225,7 +225,7 @@ defmodule ArkePostgres.Query do
 
   def init_unit(record, arke, project) do
     arke = get_arke(project, record, arke)
-    {metadata, record} = Map.pop(record, :metadata)
+    {metadata, record} = Map.pop(record, :metadata, %{})
     {record_data, record} = Map.pop(record, :data, %{})
 
     record_data =
