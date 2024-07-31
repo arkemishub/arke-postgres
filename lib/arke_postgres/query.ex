@@ -261,11 +261,11 @@ defmodule ArkePostgres.Query do
     end)
   end
 
-  defp init_unit(nil, _, _), do: nil
+  def init_unit(nil, _, _), do: nil
 
-  defp init_unit(record, arke, project) do
+  def init_unit(record, arke, project) do
     arke = get_arke(project, record, arke)
-    {metadata, record} = Map.pop(record, :metadata)
+    {metadata, record} = Map.pop(record, :metadata, %{})
     {record_data, record} = Map.pop(record, :data, %{})
 
     record_data =
@@ -279,7 +279,7 @@ defmodule ArkePostgres.Query do
     Arke.Core.Unit.load(arke, record)
   end
 
-  defp handle_filters(query, filters) do
+  def handle_filters(query, filters) do
     Enum.reduce(filters, query, fn %{logic: logic, negate: negate, base_filters: base_filters},
                                    new_query ->
       clause = handle_condition(logic, base_filters) |> handle_negate_condition(negate)
@@ -604,48 +604,44 @@ defmodule ArkePostgres.Query do
           ^depth
         ),
       where: ^where_field,
-      select: count(a.id, :distinct)
+      select: count([a.id, cte.starting_unit], :distinct)
     )
   end
 
   defp get_link_query(_action, project, unit_id_list, link_field, tree_field, depth, where_field) do
-    q =
-      from(
-        r in from(a in "arke_unit",
-          left_join:
-            cte in fragment(
-              @raw_cte_query,
-              literal(^link_field),
-              literal(^project),
-              literal(^link_field),
-              ^unit_id_list,
-              literal(^project),
-              literal(^project),
-              literal(^project),
-              literal(^project),
-              literal(^project),
-              literal(^project),
-              literal(^link_field),
-              literal(^tree_field),
-              ^depth
-            ),
-          where: ^where_field,
-          distinct: a.id,
-          select: %{
-            id: a.id,
-            arke_id: a.arke_id,
-            data: a.data,
-            metadata: a.metadata,
-            inserted_at: a.inserted_at,
-            updated_at: a.updated_at,
-            depth: cte.depth,
-            link_metadata: cte.metadata,
-            link_type: cte.type,
-            starting_unit: cte.starting_unit
-          }
-        )
-      )
-
-    from(x in subquery(q), select: x)
+    q = from(r in from(a in "arke_unit",
+      left_join:
+        cte in fragment(
+          @raw_cte_query,
+          literal(^link_field),
+          literal(^project),
+          literal(^link_field),
+          ^unit_id_list,
+          literal(^project),
+          literal(^project),
+          literal(^project),
+          literal(^project),
+          literal(^project),
+          literal(^project),
+          literal(^link_field),
+          literal(^tree_field),
+          ^depth
+        ),
+      where: ^where_field,
+      distinct: [a.id, cte.starting_unit],
+      select: %{
+        id: a.id,
+        arke_id: a.arke_id,
+        data: a.data,
+        metadata: a.metadata,
+        inserted_at: a.inserted_at,
+        updated_at: a.updated_at,
+        depth: cte.depth,
+        link_metadata: cte.metadata,
+        link_type: cte.type,
+        starting_unit: cte.starting_unit
+      }
+    ))
+    from x in subquery(q), select: x
   end
 end
