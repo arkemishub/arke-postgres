@@ -55,6 +55,22 @@ defmodule ArkePostgres.Query do
   def get_column(%{data: %{persistence: "table_column"}} = parameter),
     do: get_table_column(parameter)
 
+  def remove_arke_system(metadata, project_id) when project_id == :arke_system, do: metadata
+  def remove_arke_system(metadata, project_id) do
+    case Map.get(metadata, "project") do
+      "arke_system" -> Map.delete(metadata, "project")
+      _ -> metadata
+    end
+  end
+
+  def merge_unit_metadata(params, units, project_id) do
+    Enum.map(params, fn param ->
+      unit_metadata = Map.get(units, param.child_id, %{})
+      merge_metadata = Map.merge(param.metadata, unit_metadata, fn _k, _v1, v2 -> v2 end)
+      Map.put(param, :metadata, remove_arke_system(merge_metadata, project_id))
+    end)
+  end
+
   def get_manager_units(project_id) do
     arke_link =%{id: :arke_link, data: %{parameters: [%{id: :type},%{id: :child_id},%{id: :parent_id},%{id: :metadata}]}}
 
@@ -74,8 +90,10 @@ defmodule ArkePostgres.Query do
       from(q in base_query(), where: q.arke_id in ^list_arke_id)
       |> ArkePostgres.Repo.all(prefix: project_id)
 
+    units_map = Map.new(unit_list, &{&1.id, &1.metadata})
+    parameter_links = merge_unit_metadata(parameter_links, units_map, project_id)
 
-    parameters = parse_parameters(Enum.filter(unit_list, fn u -> u.arke_id in parameters_id end))
+    parameters = parse_parameters(Enum.filter(unit_list, fn u -> u.arke_id in parameters_id end), project_id)
 
     arke_list =
       parse_arke_list(
@@ -99,7 +117,7 @@ defmodule ArkePostgres.Query do
 
   defp parse_arke_list(arke_list, parameter_links) do
     # todo: remove the string to atom when everything would become string
-    Enum.reduce(arke_list, [], fn %{id: id} = unit, new_arke_list ->
+    Enum.reduce(arke_list, [], fn %{id: id, metadata: metadata} = unit, new_arke_list ->
       params =
         Enum.reduce(
           Enum.filter(parameter_links, fn x -> x.parent_id == id end),
@@ -110,24 +128,27 @@ defmodule ArkePostgres.Query do
         )
         updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
         |> Map.put(:id, id)
+        |> Map.put(:metadata, metadata)
         |> Map.update(:parameters,[], fn current -> params ++ current end)
 
       [ updated_data | new_arke_list]
     end)
   end
 
-  defp parse_parameters(parameter_list)do
-    Enum.reduce(parameter_list, [], fn %{id: id, arke_id: arke_id} = unit, new_parameter_list ->
+  defp parse_parameters(parameter_list, project_id)do
+    Enum.reduce(parameter_list, [], fn %{id: id, arke_id: arke_id, metadata: metadata} = unit, new_parameter_list ->
+      parsed_metadata = remove_arke_system(metadata, project_id)
 
       updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
                      |> Map.put(:id, id)
-                     |> Map.put(:type,arke_id)
+                     |> Map.put(:type, arke_id)
+                     |> Map.put(:metadata, parsed_metadata)
       [ updated_data | new_parameter_list]
     end)
   end
 
   defp parse_groups(groups, group_links) do
-    Enum.reduce(groups, [], fn %{id: id} = unit, new_groups ->
+    Enum.reduce(groups, [], fn %{id: id, metadata: metadata} = unit, new_groups ->
       arke_list =
         Enum.reduce(
           Enum.filter(group_links, fn x -> x.parent_id == id end),
@@ -138,6 +159,7 @@ defmodule ArkePostgres.Query do
         )
       updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
                      |> Map.put(:id, id)
+                     |> Map.put(:metadata, metadata)
                      |> Map.update(:arke_list,[], fn db_arke_list ->
       Enum.reduce(db_arke_list,[], fn key,acc ->
         case Enum.find(arke_list, fn %{id: id, metadata: _metadata} -> to_string(id) == key end) do
