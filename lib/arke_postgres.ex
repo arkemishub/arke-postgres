@@ -28,8 +28,10 @@ defmodule ArkePostgres do
 
           :ok
         rescue
-          _ in DBConnection.ConnectionError ->
-            IO.inspect("ConnectionError")
+          err in DBConnection.ConnectionError ->
+            %{message: message,reason: reason} = err
+            parsed_message = %{context: "postgrex_error", message: "error: #{err}, msg: #{message}"}
+            IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
             :error
           err in Postgrex.Error ->
             %{message: message,postgres: %{code: code, message: postgres_message}} = err
@@ -229,7 +231,11 @@ defmodule ArkePostgres do
       :ok
     rescue
       _ in DBConnection.ConnectionError -> :error
-      _ in Postgrex.Error -> :error
+      err in Postgrex.Error ->
+        %{message: message,postgres: %{code: code, message: postgres_message}} = err
+        parsed_message = %{context: "postgrex_error", message: "#{message || postgres_message}"}
+        IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+        :error
     end
   end
 
