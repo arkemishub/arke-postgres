@@ -30,7 +30,7 @@ defmodule ArkePostgres do
         rescue
           err in DBConnection.ConnectionError ->
             %{message: message,reason: reason} = err
-            parsed_message = %{context: "postgrex_error", message: "error: #{err}, msg: #{message}"}
+            parsed_message = %{context: "db_connection_error", message: "error: #{err}, msg: #{message}"}
             IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
             :error
           err in Postgrex.Error ->
@@ -230,7 +230,12 @@ defmodule ArkePostgres do
       Ecto.Migrator.run(ArkePostgres.Repo, :up, all: true, prefix: id)
       :ok
     rescue
-      _ in DBConnection.ConnectionError -> :error
+      err in DBConnection.ConnectionError ->
+        %{message: message,reason: reason} = err
+        parsed_message = %{context: "db_connection_error", message: "error: #{err}, msg: #{message}"}
+        IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+        :error
+        :error
       err in Postgrex.Error ->
         %{message: message,postgres: %{code: code, message: postgres_message}} = err
         parsed_message = %{context: "postgrex_error", message: "#{message || postgres_message}"}
