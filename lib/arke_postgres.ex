@@ -21,7 +21,7 @@ defmodule ArkePostgres do
       {:ok, nil} ->
         try do
 
-          projects =Query.get_project_record()
+          projects =Query.get_project_record() |> Enum.sort_by(&(to_string(&1.id) == "arke_system"),:desc)
           Enum.each(projects, fn %{id: project_id} = _project ->
             start_managers(project_id)
           end)
