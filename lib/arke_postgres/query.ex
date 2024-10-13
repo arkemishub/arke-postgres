@@ -23,6 +23,7 @@ defmodule ArkePostgres.Query do
         action
       ) do
     base_query(arke_query, action)
+    |> handle_paths_join(filters, orders)
     |> handle_filters(filters)
     |> handle_orders(orders)
     |> handle_offset(offset)
@@ -49,7 +50,7 @@ defmodule ArkePostgres.Query do
 
   def execute(query, :pseudo_query), do: generate_query(query, :pseudo_query)
 
-  def get_column(_column, joined \\ nil)
+  def get_column(column), do: get_column(column, false)
 
   def get_column(%{data: %{persistence: "arke_parameter"}} = parameter, joined),
     do: get_arke_column(parameter, joined)
@@ -308,42 +309,62 @@ defmodule ArkePostgres.Query do
     Arke.Core.Unit.load(arke, record)
   end
 
+  defp handle_paths_join(query, filters, orders) do
+    paths = extract_paths(filters) ++ extract_paths(orders)
+
+    case paths do
+      [] ->
+        query
+
+      _ ->
+        conditions =
+          Enum.reduce(paths, nil, fn path, acc ->
+            condition = dynamic([q, j], ^get_column(List.first(path)) == j.id)
+            if is_nil(acc), do: condition, else: dynamic([q, j], ^acc or ^condition)
+          end)
+
+        from(q in query, join: j in "arke_unit", on: ^conditions)
+    end
+  end
+
+  defp extract_paths(items) do
+    items
+    |> Enum.flat_map(fn
+      %{base_filters: base_filters} -> Enum.map(base_filters, & &1.path)
+      %{path: path} -> [path]
+      _ -> []
+    end)
+    |> Enum.reject(&(is_nil(&1) or length(&1) == 0))
+    |> Enum.uniq()
+  end
+
   def handle_filters(query, filters) do
     Enum.reduce(filters, query, fn %{logic: logic, negate: negate, base_filters: base_filters},
                                    new_query ->
-      {join, clause} = handle_conditions_and_join(logic, base_filters)
-      clause = handle_negate_condition(clause, negate)
-
-      case join do
-        nil -> from(q in new_query, where: ^clause)
-        _ -> from(q in new_query, join: j in "arke_unit", on: ^join, where: ^clause)
-      end
+      clause = handle_conditions(logic, base_filters) |> handle_negate_condition(negate)
+      from(q in new_query, where: ^clause)
     end)
   end
 
-  defp handle_conditions_and_join(logic, base_filters) do
-    Enum.reduce(base_filters, {nil, nil}, fn %{
-                                               parameter: parameter,
-                                               operator: operator,
-                                               value: value,
-                                               negate: negate,
-                                               path: path
-                                             },
-                                             {join, clause} ->
+  defp handle_conditions(logic, base_filters) do
+    Enum.reduce(base_filters, nil, fn %{
+                                        parameter: parameter,
+                                        operator: operator,
+                                        value: value,
+                                        negate: negate,
+                                        path: path
+                                      },
+                                      clause ->
       if length(path) == 0 do
-        {join,
-         parameter_condition(clause, parameter, value, operator, negate, logic)
-         |> add_condition_to_clause(clause, logic)}
+        parameter_condition(clause, parameter, value, operator, negate, logic)
+        |> add_condition_to_clause(clause, logic)
       else
         # todo enhance to get multi-level path
         path_parameter = List.first(path)
 
         if not is_nil(path_parameter) do
-          {
-            dynamic([q, j], ^get_column(path_parameter) == j.id),
-            parameter_condition(clause, parameter, value, operator, negate, logic, true)
-            |> add_nested_condition_to_clause(clause, logic)
-          }
+          parameter_condition(clause, parameter, value, operator, negate, logic, true)
+          |> add_nested_condition_to_clause(clause, logic)
         end
       end
     end)
@@ -379,8 +400,10 @@ defmodule ArkePostgres.Query do
 
   defp handle_orders(query, orders) do
     order_by =
-      Enum.reduce(orders, [], fn %{parameter: parameter, direction: direction}, new_order_by ->
-        column = get_column(parameter)
+      Enum.reduce(orders, [], fn %{parameter: parameter, direction: direction, path: path},
+                                 new_order_by ->
+        joined = length(path) > 0
+        column = get_column(parameter, joined)
         [{direction, column} | new_order_by]
       end)
 
