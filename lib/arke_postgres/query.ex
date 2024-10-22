@@ -341,12 +341,12 @@ defmodule ArkePostgres.Query do
   def handle_filters(query, filters) do
     Enum.reduce(filters, query, fn %{logic: logic, negate: negate, base_filters: base_filters},
                                    new_query ->
-      clause = handle_conditions(logic, base_filters) |> handle_negate_condition(negate)
+      clause = handle_condition(logic, base_filters) |> handle_negate_condition(negate)
       from(q in new_query, where: ^clause)
     end)
   end
 
-  defp handle_conditions(logic, base_filters) do
+  def handle_condition(logic, base_filters) do
     Enum.reduce(base_filters, nil, fn %{
                                         parameter: parameter,
                                         operator: operator,
