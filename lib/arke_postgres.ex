@@ -14,7 +14,7 @@
 
 defmodule ArkePostgres do
   alias Arke.Boundary.{GroupManager, ArkeManager}
-  alias ArkePostgres.{Table, ArkeUnit, Query}
+  alias ArkePostgres.{Table, ArkeUnit, ArkeLink, Query}
 
   def init() do
     case check_env() do
@@ -112,12 +112,21 @@ defmodule ArkePostgres do
 
   defp handle_create(
          project,
+         %{id: :arke_link} = arke,
+         unit_list,
+         opts
+       ),
+       do: ArkeLink.insert(project, arke, unit_list, opts)
+
+  defp handle_create(
+         project,
          %{data: %{type: "table"}} = arke,
          [%{data: data, metadata: metadata} = unit | _] = _,
          _opts
        ) do
     # todo: handle bulk?
     # todo: remove once the project is not needed anymore
+
     data = data |> Map.merge(%{metadata: Map.delete(metadata, :project)}) |> data_as_klist
     Table.insert(project, arke, data)
     {:ok, unit}
@@ -179,6 +188,13 @@ defmodule ArkePostgres do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
     handle_delete(project, arke, unit_list)
   end
+
+  defp handle_delete(
+         project,
+         %{id: :arke_link} = arke,
+         unit_list
+       ),
+       do: ArkeLink.delete(project, arke, unit_list)
 
   defp handle_delete(
          project,
