@@ -13,7 +13,7 @@
 # limitations under the License.
 
 defmodule ArkePostgres.ArkeLink do
-  import Ecto.Query, only: [from: 2]
+  import Ecto.Query, only: [from: 2, dynamic: 2, dynamic: 1]
   alias Arke.Utils.ErrorGenerator, as: Error
 
   def get_all(project, schema, fields, where \\ []) do
@@ -60,22 +60,58 @@ defmodule ArkePostgres.ArkeLink do
     end
   end
 
-  def update(project, schema, data, where \\ []) do
-    query = from(ArkePostgres.Tables.ArkeLink, where: ^where, update: [set: ^data])
-    ArkePostgres.Repo.update_all(query, [], prefix: project)
+  def update(project, schema, data, opts \\ []) do
+    records =
+      Enum.map(data, fn unit ->
+        %{
+          parent_id: Map.get(unit.data, :parent_id),
+          child_id: Map.get(unit.data, :child_id),
+          type: Map.get(unit.data, :type),
+          metadata: Map.delete(Map.get(unit, :metadata), :project)
+        }
+      end)
+
+    case ArkePostgres.Repo.insert_all(ArkePostgres.Tables.ArkeLink, records,
+           prefix: project,
+           returning: [:child_id, :parent_id, :type],
+           on_conflict: {:replace_all_except, [:type, :parent_id, :child_id, :id]},
+           conflict_target: [:type, :parent_id, :child_id]
+         ) do
+      {0, _} ->
+        {:error, Error.create(:insert, "no records inserted")}
+
+      {count, updated} ->
+        updated_keys =
+          Enum.map(updated, fn link -> {link.type, link.parent_id, link.child_id} end)
+
+        {valid, errors} =
+          Enum.split_with(data, fn unit ->
+            {unit.data[:type], unit.data[:parent_id], unit.data[:child_id]} in updated_keys
+          end)
+
+        case opts[:bulk] do
+          true -> {:ok, count, valid, errors}
+          _ -> {:ok, List.first(valid)}
+        end
+    end
   end
 
   def delete(project, schema, unit_list) do
-    query =
-      from([a] in ArkePostgres.Tables.ArkeLink,
-        where: a.id in ^Enum.map(unit_list, &Atom.to_string(&1.id))
-      )
+    where =
+      Enum.reduce(unit_list, dynamic(false), fn unit, dynamic ->
+        dynamic(
+          [a],
+          ^dynamic or
+            (a.parent_id == ^unit.data.parent_id and a.child_id == ^unit.data.child_id and
+               a.type == ^unit.data.type)
+        )
+      end)
 
-    IO.inspect(query)
+    query = from(ArkePostgres.Tables.ArkeLink, where: ^where)
 
-    # case ArkePostgres.Repo.delete_all(query, prefix: project) do
-    #   {0, nil} -> Error.create(:delete, "item not found")
-    #   _ -> {:ok, nil}
-    # end
+    case ArkePostgres.Repo.delete_all(query, prefix: project) do
+      {0, nil} -> Error.create(:delete, "item not found")
+      _ -> {:ok, nil}
+    end
   end
 end

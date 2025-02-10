@@ -153,6 +153,14 @@ defmodule ArkePostgres do
 
   def handle_update(
         project,
+        %{id: :arke_link} = arke,
+        unit_list,
+        opts
+      ),
+      do: ArkeLink.update(project, arke, unit_list, opts)
+
+  def handle_update(
+        project,
         %{data: %{type: "table"}} = arke,
         [%{data: data, metadata: metadata} = unit | _] = _,
         _opts
