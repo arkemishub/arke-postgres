@@ -14,14 +14,16 @@
 
 defmodule ArkePostgres do
   alias Arke.Boundary.{GroupManager, ArkeManager}
-  alias ArkePostgres.{Table, ArkeUnit, Query}
+  alias ArkePostgres.{Table, ArkeUnit, ArkeLink, Query}
 
   def init() do
     case check_env() do
       {:ok, nil} ->
         try do
+          projects =
+            Query.get_project_record()
+            |> Enum.sort_by(&(to_string(&1.id) == "arke_system"), :desc)
 
-          projects =Query.get_project_record() |> Enum.sort_by(&(to_string(&1.id) == "arke_system"),:desc)
           Enum.each(projects, fn %{id: project_id} = _project ->
             start_managers(project_id)
           end)
@@ -29,9 +31,14 @@ defmodule ArkePostgres do
           :ok
         rescue
           err in DBConnection.ConnectionError ->
-            %{message: message,reason: reason} = err
-            parsed_message = %{context: "db_connection_error", message: "error: #{err}, msg: #{message}"}
-            IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+            %{message: message, reason: reason} = err
+
+            parsed_message = %{
+              context: "db_connection_error",
+              message: "error: #{err}, msg: #{message}"
+            }
+
+            IO.inspect(parsed_message, syntax_colors: [string: :red, atom: :cyan])
             :error
 
           err in Postgrex.Error ->
@@ -114,12 +121,21 @@ defmodule ArkePostgres do
 
   defp handle_create(
          project,
+         %{id: :arke_link} = arke,
+         unit_list,
+         opts
+       ),
+       do: ArkeLink.insert(project, arke, unit_list, opts)
+
+  defp handle_create(
+         project,
          %{data: %{type: "table"}} = arke,
          [%{data: data, metadata: metadata} = unit | _] = _,
          _opts
        ) do
     # todo: handle bulk?
     # todo: remove once the project is not needed anymore
+
     data = data |> Map.merge(%{metadata: Map.delete(metadata, :project)}) |> data_as_klist
     Table.insert(project, arke, data)
     {:ok, unit}
@@ -143,6 +159,14 @@ defmodule ArkePostgres do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
     handle_update(project, arke, unit_list, opts)
   end
+
+  def handle_update(
+        project,
+        %{id: :arke_link} = arke,
+        unit_list,
+        opts
+      ),
+      do: ArkeLink.update(project, arke, unit_list, opts)
 
   def handle_update(
         project,
@@ -181,6 +205,13 @@ defmodule ArkePostgres do
     arke = Arke.Boundary.ArkeManager.get(arke_id, project)
     handle_delete(project, arke, unit_list)
   end
+
+  defp handle_delete(
+         project,
+         %{id: :arke_link} = arke,
+         unit_list
+       ),
+       do: ArkeLink.delete(project, arke, unit_list)
 
   defp handle_delete(
          project,
@@ -257,15 +288,17 @@ defmodule ArkePostgres do
         IO.inspect("DBConnection.ConnectionError")
         %{message: message} = err
         parsed_message = %{context: "db_connection_error", message: "#{message}"}
-        IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+        IO.inspect(parsed_message, syntax_colors: [string: :red, atom: :cyan])
         :error
+
       err in Postgrex.Error ->
         IO.inspect("Postgrex.Error")
-        %{message: message,postgres: %{code: code, message: postgres_message}} = err
+        %{message: message, postgres: %{code: code, message: postgres_message}} = err
         parsed_message = %{context: "postgrex_error", message: "#{message || postgres_message}"}
-        IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+        IO.inspect(parsed_message, syntax_colors: [string: :red, atom: :cyan])
         :error
-        err ->
+
+      err ->
         IO.inspect("uncatched error")
         IO.inspect(err)
         :error
