@@ -20,16 +20,18 @@ defmodule ArkePostgres do
     case check_env() do
       {:ok, nil} ->
         try do
-          projects = Query.get_project_record()
 
+          projects =Query.get_project_record() |> Enum.sort_by(&(to_string(&1.id) == "arke_system"),:desc)
           Enum.each(projects, fn %{id: project_id} = _project ->
             start_managers(project_id)
           end)
 
           :ok
         rescue
-          _ in DBConnection.ConnectionError ->
-            IO.inspect("ConnectionError")
+          err in DBConnection.ConnectionError ->
+            %{message: message,reason: reason} = err
+            parsed_message = %{context: "db_connection_error", message: "error: #{err}, msg: #{message}"}
+            IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
             :error
 
           err in Postgrex.Error ->
@@ -251,8 +253,22 @@ defmodule ArkePostgres do
       Ecto.Migrator.run(ArkePostgres.Repo, :up, all: true, prefix: id)
       :ok
     rescue
-      _ in DBConnection.ConnectionError -> :error
-      _ in Postgrex.Error -> :error
+      err in DBConnection.ConnectionError ->
+        IO.inspect("DBConnection.ConnectionError")
+        %{message: message} = err
+        parsed_message = %{context: "db_connection_error", message: "#{message}"}
+        IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+        :error
+      err in Postgrex.Error ->
+        IO.inspect("Postgrex.Error")
+        %{message: message,postgres: %{code: code, message: postgres_message}} = err
+        parsed_message = %{context: "postgrex_error", message: "#{message || postgres_message}"}
+        IO.inspect(parsed_message,syntax_colors: [string: :red,atom: :cyan, ])
+        :error
+        err ->
+        IO.inspect("uncatched error")
+        IO.inspect(err)
+        :error
     end
   end
 
