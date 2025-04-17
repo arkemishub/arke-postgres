@@ -473,6 +473,7 @@ defmodule ArkePostgres.Query do
 
   defp filter_query_by_operator(%{data: %{multiple: true}}, column, value, :eq), do: dynamic([q], fragment("jsonb_exists(?, ?)", ^column, ^value))
   defp filter_query_by_operator(parameter, column, value, :eq), do: dynamic([q], ^column == ^value)
+  defp filter_query_by_operator(parameter, column, value, :ieq), do: dynamic([q], ilike(^column, fragment("?", ^(value))))
 
   defp filter_query_by_operator(parameter, column, value, :contains),
     do: dynamic([q], like(^column, fragment("?", ^("%" <> value <> "%"))))
