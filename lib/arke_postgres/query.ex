@@ -23,8 +23,10 @@ defmodule ArkePostgres.Query do
         %{filters: filters, orders: orders, offset: offset, limit: limit} = arke_query,
         action
       ) do
+    paths = extract_paths(filters) ++ extract_paths(orders)
+
     base_query(arke_query, action)
-    |> handle_paths_join(filters, orders)
+    |> handle_paths_join(paths)
     |> handle_filters(filters)
     |> handle_orders(orders)
     |> handle_offset(offset)
@@ -310,26 +312,20 @@ defmodule ArkePostgres.Query do
     Arke.Core.Unit.load(arke, record)
   end
 
-  defp handle_paths_join(query, filters, orders) do
-    paths = extract_paths(filters) ++ extract_paths(orders)
+  defp handle_paths_join(query, []), do: query
 
-    case paths do
-      [] ->
-        query
+  defp handle_paths_join(query, paths) do
+    conditions =
+      Enum.reduce(paths, nil, fn path, acc ->
+        condition = dynamic([q, j], ^get_column(List.first(path)) == j.id)
+        if is_nil(acc), do: condition, else: dynamic([q, j], ^acc or ^condition)
+      end)
 
-      _ ->
-        conditions =
-          Enum.reduce(paths, nil, fn path, acc ->
-            condition = dynamic([q, j], ^get_column(List.first(path)) == j.id)
-            if is_nil(acc), do: condition, else: dynamic([q, j], ^acc or ^condition)
-          end)
-
-        from(q in query, join: j in "arke_unit", on: ^conditions)
-    end
+    from(q in query, join: j in "arke_unit", on: ^conditions)
   end
 
-  defp extract_paths(filters) do
-    filters
+  defp extract_paths(items) do
+    items
     |> Enum.flat_map(&extract_path/1)
     |> Enum.reject(&(is_nil(&1) or length(&1) == 0))
     |> Enum.uniq()
@@ -339,6 +335,8 @@ defmodule ArkePostgres.Query do
     do: Enum.flat_map(base_filters, &extract_path/1)
 
   def extract_path(%Arke.Core.Query.BaseFilter{path: path}), do: [path]
+  def extract_path(%Arke.Core.Query.Order{path: path}), do: [path]
+
   def extract_path(_), do: []
 
   def handle_filters(query, filters) do
@@ -352,39 +350,50 @@ defmodule ArkePostgres.Query do
   defp build_filter_clause(parent_logic, filters),
     do: build_filter_clause(nil, parent_logic, filters)
 
-  defp build_filter_clause(clause, parent_logic, filters) do
-    Enum.reduce(filters, clause, fn
-      %Arke.Core.Query.Filter{logic: logic, base_filters: nested_filters}, clause ->
-        nested_clause = build_filter_clause(nil, logic, nested_filters)
-        add_condition_to_clause(nested_clause, clause, parent_logic)
+  defp build_filter_clause(clause, parent_logic, filters),
+    do: Enum.reduce(filters, clause, &handle_clause(&1, &2, parent_logic))
 
-      %Arke.Core.Query.BaseFilter{
-        parameter: parameter,
-        operator: operator,
-        value: value,
-        negate: negate,
-        path: []
-      },
-      clause ->
-        parameter_condition(clause, parameter, value, operator, negate, parent_logic)
-        |> add_condition_to_clause(clause, parent_logic)
+  defp handle_clause(
+         %Arke.Core.Query.Filter{logic: logic, base_filters: nested_filters},
+         clause,
+         parent_logic
+       ),
+       do:
+         build_filter_clause(nil, logic, nested_filters)
+         |> add_condition_to_clause(clause, parent_logic)
 
-      %Arke.Core.Query.BaseFilter{
-        parameter: parameter,
-        operator: operator,
-        value: value,
-        negate: negate,
-        path: [path_parameter | _]
-      },
-      clause
-      when not is_nil(path_parameter) ->
-        parameter_condition(clause, parameter, value, operator, negate, parent_logic, true)
-        |> add_nested_condition_to_clause(clause, parent_logic)
+  defp handle_clause(
+         %Arke.Core.Query.BaseFilter{
+           parameter: parameter,
+           operator: operator,
+           value: value,
+           negate: negate,
+           path: []
+         },
+         clause,
+         parent_logic
+       ),
+       do:
+         parameter_condition(clause, parameter, value, operator, negate, parent_logic)
+         |> add_condition_to_clause(clause, parent_logic)
 
-      _, clause ->
-        clause
-    end)
-  end
+  defp handle_clause(
+         %Arke.Core.Query.BaseFilter{
+           parameter: parameter,
+           operator: operator,
+           value: value,
+           negate: negate,
+           path: [path_parameter | _]
+         },
+         clause,
+         parent_logic
+       )
+       when not is_nil(path_parameter),
+       do:
+         parameter_condition(clause, parameter, value, operator, negate, parent_logic, true)
+         |> add_nested_condition_to_clause(clause, parent_logic)
+
+  defp handle_clause(_, clause, _), do: clause
 
   defp parameter_condition(clause, parameter, value, operator, negate, logic, joined \\ nil) do
     column = get_column(parameter, joined)
