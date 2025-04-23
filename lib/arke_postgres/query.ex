@@ -321,7 +321,7 @@ defmodule ArkePostgres.Query do
         if is_nil(acc), do: condition, else: dynamic([q, j], ^acc or ^condition)
       end)
 
-    from(q in query, join: j in "arke_unit", on: ^conditions)
+    from(q in query, left_join: j in "arke_unit", on: ^conditions)
   end
 
   defp extract_paths(items) do
