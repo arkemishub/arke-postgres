@@ -14,6 +14,7 @@
 
 defmodule ArkePostgres.Query do
   import Ecto.Query
+  require IEx
   alias Arke.Utils.DatetimeHandler, as: DatetimeHandler
 
   @record_fields [:id, :arke_id, :data, :metadata, :inserted_at, :updated_at]
@@ -22,7 +23,10 @@ defmodule ArkePostgres.Query do
         %{filters: filters, orders: orders, offset: offset, limit: limit} = arke_query,
         action
       ) do
+    paths = extract_paths(filters) ++ extract_paths(orders)
+
     base_query(arke_query, action)
+    |> handle_paths_join(paths)
     |> handle_filters(filters)
     |> handle_orders(orders)
     |> handle_offset(offset)
@@ -49,13 +53,16 @@ defmodule ArkePostgres.Query do
 
   def execute(query, :pseudo_query), do: generate_query(query, :pseudo_query)
 
-  def get_column(%{data: %{persistence: "arke_parameter"}} = parameter),
-    do: get_arke_column(parameter)
+  def get_column(column), do: get_column(column, false)
 
-  def get_column(%{data: %{persistence: "table_column"}} = parameter),
+  def get_column(%{data: %{persistence: "arke_parameter"}} = parameter, joined),
+    do: get_arke_column(parameter, joined)
+
+  def get_column(%{data: %{persistence: "table_column"}} = parameter, _joined),
     do: get_table_column(parameter)
 
   def remove_arke_system(metadata, project_id) when project_id == :arke_system, do: metadata
+
   def remove_arke_system(metadata, project_id) do
     case Map.get(metadata, "project") do
       "arke_system" -> Map.delete(metadata, "project")
@@ -72,7 +79,10 @@ defmodule ArkePostgres.Query do
   end
 
   def get_manager_units(project_id) do
-    arke_link =%{id: :arke_link, data: %{parameters: [%{id: :type},%{id: :child_id},%{id: :parent_id},%{id: :metadata}]}}
+    arke_link = %{
+      id: :arke_link,
+      data: %{parameters: [%{id: :type}, %{id: :child_id}, %{id: :parent_id}, %{id: :metadata}]}
+    }
 
     links =
       from(q in table_query(arke_link, nil), where: q.type in ["parameter", "group"])
@@ -80,7 +90,6 @@ defmodule ArkePostgres.Query do
 
     parameter_links = Enum.filter(links, fn x -> x.type == "parameter" end)
     group_links = Enum.filter(links, fn x -> x.type == "group" end)
-
 
     parameters_id = Arke.Utils.DefaultData.get_parameters_id()
 
@@ -93,13 +102,15 @@ defmodule ArkePostgres.Query do
     units_map = Map.new(unit_list, &{&1.id, &1.metadata})
     parameter_links = merge_unit_metadata(parameter_links, units_map, project_id)
 
-    parameters = parse_parameters(Enum.filter(unit_list, fn u -> u.arke_id in parameters_id end), project_id)
+    parameters =
+      parse_parameters(Enum.filter(unit_list, fn u -> u.arke_id in parameters_id end), project_id)
 
     arke_list =
       parse_arke_list(
         Enum.filter(unit_list, fn u -> u.arke_id == "arke" end),
         parameter_links
       )
+
     groups =
       parse_groups(
         Enum.filter(unit_list, fn u -> u.arke_id == "group" end),
@@ -123,27 +134,45 @@ defmodule ArkePostgres.Query do
           Enum.filter(parameter_links, fn x -> x.parent_id == id end),
           [],
           fn p, new_params ->
-            [%{id: String.to_atom(p.child_id), metadata: Enum.reduce(p.metadata,%{}, fn {key, val}, acc -> Map.put(acc, String.to_atom(key), val) end)} | new_params]
+            [
+              %{
+                id: String.to_atom(p.child_id),
+                metadata:
+                  Enum.reduce(p.metadata, %{}, fn {key, val}, acc ->
+                    Map.put(acc, String.to_atom(key), val)
+                  end)
+              }
+              | new_params
+            ]
           end
         )
-        updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
+
+      updated_data =
+        Enum.reduce(unit.data, %{}, fn {k, db_data}, acc ->
+          Map.put(acc, String.to_atom(k), db_data["value"])
+        end)
         |> Map.put(:id, id)
         |> Map.put(:metadata, metadata)
-        |> Map.update(:parameters,[], fn current -> params ++ current end)
+        |> Map.update(:parameters, [], fn current -> params ++ current end)
 
-      [ updated_data | new_arke_list]
+      [updated_data | new_arke_list]
     end)
   end
 
-  defp parse_parameters(parameter_list, project_id)do
-    Enum.reduce(parameter_list, [], fn %{id: id, arke_id: arke_id, metadata: metadata} = unit, new_parameter_list ->
+  defp parse_parameters(parameter_list, project_id) do
+    Enum.reduce(parameter_list, [], fn %{id: id, arke_id: arke_id, metadata: metadata} = unit,
+                                       new_parameter_list ->
       parsed_metadata = remove_arke_system(metadata, project_id)
 
-      updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
-                     |> Map.put(:id, id)
-                     |> Map.put(:type, arke_id)
-                     |> Map.put(:metadata, parsed_metadata)
-      [ updated_data | new_parameter_list]
+      updated_data =
+        Enum.reduce(unit.data, %{}, fn {k, db_data}, acc ->
+          Map.put(acc, String.to_atom(k), db_data["value"])
+        end)
+        |> Map.put(:id, id)
+        |> Map.put(:type, arke_id)
+        |> Map.put(:metadata, parsed_metadata)
+
+      [updated_data | new_parameter_list]
     end)
   end
 
@@ -157,22 +186,30 @@ defmodule ArkePostgres.Query do
             [%{id: String.to_atom(p.child_id), metadata: p.metadata} | new_params]
           end
         )
-      updated_data = Enum.reduce(unit.data,%{}, fn {k,db_data},acc -> Map.put(acc,String.to_atom(k),db_data["value"]) end)
-                     |> Map.put(:id, id)
-                     |> Map.put(:metadata, metadata)
-                     |> Map.update(:arke_list,[], fn db_arke_list ->
-      Enum.reduce(db_arke_list,[], fn key,acc ->
-        case Enum.find(arke_list, fn %{id: id, metadata: _metadata} -> to_string(id) == key end) do
-          nil -> [key|acc]
-          data ->
-            [data|acc]
-        end
-       end)
-      end)
-      [ updated_data | new_groups]
+
+      updated_data =
+        Enum.reduce(unit.data, %{}, fn {k, db_data}, acc ->
+          Map.put(acc, String.to_atom(k), db_data["value"])
+        end)
+        |> Map.put(:id, id)
+        |> Map.put(:metadata, metadata)
+        |> Map.update(:arke_list, [], fn db_arke_list ->
+          Enum.reduce(db_arke_list, [], fn key, acc ->
+            case Enum.find(arke_list, fn %{id: id, metadata: _metadata} ->
+                   to_string(id) == key
+                 end) do
+              nil ->
+                [key | acc]
+
+              data ->
+                [data | acc]
+            end
+          end)
+        end)
+
+      [updated_data | new_groups]
     end)
   end
-
 
   ######################################################################################################################
   # PRIVATE FUNCTIONS ##################################################################################################
@@ -182,17 +219,31 @@ defmodule ArkePostgres.Query do
 
   defp base_query(%{link: nil} = _arke_query, action), do: arke_query(action)
 
-  defp base_query(%{link: %{unit: %{id: link_id},depth: depth, direction: direction,type: type}, project: project} = _arke_query, action),
-    do:
-      get_nodes(
-        project,
-        action,
-        [to_string(link_id)],
-        depth,
-        direction,
-        type
-      )
-  defp base_query(%{link: %{unit: unit_list,depth: depth, direction: direction,type: type}, project: project} = _arke_query, action) when is_list(unit_list) do
+  defp base_query(
+         %{
+           link: %{unit: %{id: link_id}, depth: depth, direction: direction, type: type},
+           project: project
+         } = _arke_query,
+         action
+       ),
+       do:
+         get_nodes(
+           project,
+           action,
+           [to_string(link_id)],
+           depth,
+           direction,
+           type
+         )
+
+  defp base_query(
+         %{
+           link: %{unit: unit_list, depth: depth, direction: direction, type: type},
+           project: project
+         } = _arke_query,
+         action
+       )
+       when is_list(unit_list) do
     get_nodes(
       project,
       action,
@@ -261,35 +312,101 @@ defmodule ArkePostgres.Query do
     Arke.Core.Unit.load(arke, record)
   end
 
+  defp handle_paths_join(query, []), do: query
+
+  defp handle_paths_join(query, paths) do
+    conditions =
+      Enum.reduce(paths, nil, fn path, acc ->
+        condition = dynamic([q, j], ^get_column(List.first(path)) == j.id)
+        if is_nil(acc), do: condition, else: dynamic([q, j], ^acc or ^condition)
+      end)
+
+    from(q in query, left_join: j in "arke_unit", on: ^conditions)
+  end
+
+  defp extract_paths(items) do
+    items
+    |> Enum.flat_map(&extract_path/1)
+    |> Enum.reject(&(is_nil(&1) or length(&1) == 0))
+    |> Enum.uniq()
+  end
+
+  def extract_path(%Arke.Core.Query.Filter{base_filters: base_filters}),
+    do: Enum.flat_map(base_filters, &extract_path/1)
+
+  def extract_path(%Arke.Core.Query.BaseFilter{path: path}), do: [path]
+  def extract_path(%Arke.Core.Query.Order{path: path}), do: [path]
+
+  def extract_path(_), do: []
+
   def handle_filters(query, filters) do
     Enum.reduce(filters, query, fn %{logic: logic, negate: negate, base_filters: base_filters},
-                                   new_query ->
-      clause = handle_condition(logic, base_filters) |> handle_negate_condition(negate)
-      from(q in new_query, where: ^clause)
+                                   query ->
+      clause = build_filter_clause(logic, base_filters) |> handle_negate_condition(negate)
+      from(q in query, where: ^clause)
     end)
   end
 
-  defp handle_condition(logic, base_filters) do
-    Enum.reduce(base_filters, nil, fn %{
-                                        parameter: parameter,
-                                        operator: operator,
-                                        value: value,
-                                        negate: negate
-                                      },
-                                      clause ->
-      column = get_column(parameter)
-      value = get_value(parameter, value)
+  defp build_filter_clause(parent_logic, filters),
+    do: build_filter_clause(nil, parent_logic, filters)
 
+  defp build_filter_clause(clause, parent_logic, filters),
+    do: Enum.reduce(filters, clause, &handle_clause(&1, &2, parent_logic))
+
+  defp handle_clause(
+         %Arke.Core.Query.Filter{logic: logic, base_filters: nested_filters},
+         clause,
+         parent_logic
+       ),
+       do:
+         build_filter_clause(nil, logic, nested_filters)
+         |> add_condition_to_clause(clause, parent_logic)
+
+  defp handle_clause(
+         %Arke.Core.Query.BaseFilter{
+           parameter: parameter,
+           operator: operator,
+           value: value,
+           negate: negate,
+           path: []
+         },
+         clause,
+         parent_logic
+       ),
+       do:
+         parameter_condition(clause, parameter, value, operator, negate, parent_logic)
+         |> add_condition_to_clause(clause, parent_logic)
+
+  defp handle_clause(
+         %Arke.Core.Query.BaseFilter{
+           parameter: parameter,
+           operator: operator,
+           value: value,
+           negate: negate,
+           path: [path_parameter | _]
+         },
+         clause,
+         parent_logic
+       )
+       when not is_nil(path_parameter),
+       do:
+         parameter_condition(clause, parameter, value, operator, negate, parent_logic, true)
+         |> add_nested_condition_to_clause(clause, parent_logic)
+
+  defp handle_clause(_, clause, _), do: clause
+
+  defp parameter_condition(clause, parameter, value, operator, negate, logic, joined \\ nil) do
+    column = get_column(parameter, joined)
+    value = get_value(parameter, value)
+
+    condition =
       if is_nil(value) or operator == :isnull do
-        condition = get_nil_query(parameter, column) |> handle_negate_condition(negate)
-        add_condition_to_clause(condition, clause, logic)
+        get_nil_query(parameter, column, negate, joined)
       else
-        condition =
-          filter_query_by_operator(parameter, column, value, operator) |> handle_negate_condition(negate)
-
-        add_condition_to_clause(condition, clause, logic)
+        filter_query_by_operator(parameter, column, value, operator)
       end
-    end)
+
+    handle_negate_condition(condition, negate)
   end
 
   defp handle_negate_condition(condition, true), do: dynamic([q], not (^condition))
@@ -299,10 +416,20 @@ defmodule ArkePostgres.Query do
   defp add_condition_to_clause(condition, clause, :and), do: dynamic([q], ^clause and ^condition)
   defp add_condition_to_clause(condition, clause, :or), do: dynamic([q], ^clause or ^condition)
 
+  defp add_nested_condition_to_clause(condition, nil, _), do: dynamic([_q, j], ^condition)
+
+  defp add_nested_condition_to_clause(condition, clause, :and),
+    do: dynamic([_q, j], ^clause and ^condition)
+
+  defp add_nested_condition_to_clause(condition, clause, :or),
+    do: dynamic([_q, j], ^clause or ^condition)
+
   defp handle_orders(query, orders) do
     order_by =
-      Enum.reduce(orders, [], fn %{parameter: parameter, direction: direction}, new_order_by ->
-        column = get_column(parameter)
+      Enum.reduce(orders, [], fn %{parameter: parameter, direction: direction, path: path},
+                                 new_order_by ->
+        joined = length(path) > 0
+        column = get_column(parameter, joined)
         [{direction, column} | new_order_by]
       end)
 
@@ -317,61 +444,152 @@ defmodule ArkePostgres.Query do
 
   defp get_table_column(%{id: id} = _parameter), do: dynamic([q], fragment("?", field(q, ^id)))
 
-  defp get_arke_column(%{id: id, data: %{multiple: true}} = _parameter),
-       do: dynamic([q], fragment("(? -> ? ->> 'value')::jsonb", field(q, :data), ^Atom.to_string(id)))
+  defp get_arke_column(%{id: id, data: %{multiple: true}} = _parameter, true),
+    do:
+      dynamic(
+        [_q, ..., j],
+        fragment("(? -> ? ->> 'value')::jsonb", field(j, :data), ^Atom.to_string(id))
+      )
 
-  defp get_arke_column(%{id: id, arke_id: :string} = _parameter),
+  defp get_arke_column(%{id: id, data: %{multiple: true}} = _parameter, _joined),
+    do:
+      dynamic([q], fragment("(? -> ? ->> 'value')::jsonb", field(q, :data), ^Atom.to_string(id)))
+
+  defp get_arke_column(%{id: id, arke_id: :string} = _parameter, true),
+    do:
+      dynamic(
+        [_, ..., j],
+        fragment("(? -> ? ->> 'value')::text", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :string} = _parameter, _joined),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
 
+  defp get_arke_column(%{id: id, arke_id: :atom} = _parameter, true),
+    do:
+      dynamic(
+        [_, ..., j],
+        fragment("(? -> ? ->> 'value')::text", field(j, :data), ^Atom.to_string(id))
+      )
 
-  defp get_arke_column(%{id: id, arke_id: :atom} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :atom} = _parameter, _joined),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
 
-  defp get_arke_column(%{id: id, arke_id: :boolean} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :boolean} = _parameter, true),
+    do:
+      dynamic(
+        [_, ..., j],
+        fragment("(? -> ? ->> 'value')::boolean", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :boolean} = _parameter, _joined),
     do:
       dynamic(
         [q],
         fragment("(? -> ? ->> 'value')::boolean", field(q, :data), ^Atom.to_string(id))
       )
 
-  defp get_arke_column(%{id: id, arke_id: :datetime} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :datetime} = _parameter, true),
+    do:
+      dynamic(
+        [_q, ..., j],
+        fragment("(? -> ? ->> 'value')::timestamp", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :datetime} = _parameter, _joined),
     do:
       dynamic(
         [q],
         fragment("(? -> ? ->> 'value')::timestamp", field(q, :data), ^Atom.to_string(id))
       )
 
-  defp get_arke_column(%{id: id, arke_id: :date} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :date} = _parameter, true),
+    do:
+      dynamic(
+        [_q, ..., j],
+        fragment("(? -> ? ->> 'value')::date", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :date} = _parameter, _joined),
     do:
       dynamic(
         [q],
         fragment("(? -> ? ->> 'value')::date", field(q, :data), ^Atom.to_string(id))
       )
 
-  defp get_arke_column(%{id: id, arke_id: :time} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :time} = _parameter, true),
+    do:
+      dynamic(
+        [_, ..., j],
+        fragment("(? -> ? ->> 'value')::time", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :time} = _parameter, _joined),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::time", field(q, :data), ^Atom.to_string(id)))
 
-  defp get_arke_column(%{id: id, arke_id: :integer} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :integer} = _parameter, true),
+    do:
+      dynamic(
+        [_q, ..., j],
+        fragment("(? -> ? ->> 'value')::integer", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :integer} = _parameter, _joined),
     do:
       dynamic(
         [q],
         fragment("(? -> ? ->> 'value')::integer", field(q, :data), ^Atom.to_string(id))
       )
 
-  defp get_arke_column(%{id: id, arke_id: :float} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :float} = _parameter, true),
+    do:
+      dynamic(
+        [_, ..., j],
+        fragment("(? -> ? ->> 'value')::float", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :float} = _parameter, _joined),
     do:
       dynamic([q], fragment("(? -> ? ->> 'value')::float", field(q, :data), ^Atom.to_string(id)))
 
-  defp get_arke_column(%{id: id, arke_id: :dict} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :dict} = _parameter, true),
+    do:
+      dynamic(
+        [_q, ..., j],
+        fragment("(? -> ? ->> 'value')::JSON", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :dict} = _parameter, _joined),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::JSON", field(q, :data), ^Atom.to_string(id)))
 
-  defp get_arke_column(%{id: id, arke_id: :list} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :list} = _parameter, true),
+    do:
+      dynamic(
+        [_, ..., j],
+        fragment("(? -> ? ->> 'value')::JSON", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :list} = _parameter, _joined),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::JSON", field(q, :data), ^Atom.to_string(id)))
 
-  defp get_arke_column(%{id: id, arke_id: :link} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :link} = _parameter, true),
+    do:
+      dynamic(
+        [_q, ..., j],
+        fragment("(? -> ? ->> 'value')::text", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :link} = _parameter, _joined),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
 
-  defp get_arke_column(%{id: id, arke_id: :dynamic} = _parameter),
+  defp get_arke_column(%{id: id, arke_id: :dynamic} = _parameter, true),
+    do:
+      dynamic(
+        [_, ..., j],
+        fragment("(? -> ? ->> 'value')::text", field(j, :data), ^Atom.to_string(id))
+      )
+
+  defp get_arke_column(%{id: id, arke_id: :dynamic} = _parameter, _joined),
     do: dynamic([q], fragment("(? -> ? ->> 'value')::text", field(q, :data), ^Atom.to_string(id)))
 
   defp get_value(_parameter, value) when is_nil(value), do: value
@@ -464,15 +682,32 @@ defmodule ArkePostgres.Query do
     end
   end
 
-  defp get_nil_query(%{id: id} = _parameter, column),
+  defp get_nil_query(%{id: id} = _parameter, column, false, false),
     do:
       dynamic(
         [q],
-        fragment("? IS NULL AND (data \\? ?)", ^column, ^Atom.to_string(id))
+        fragment("? IS NULL AND (?.data \\? ?)", ^column, q, ^Atom.to_string(id))
       )
 
-  defp filter_query_by_operator(%{data: %{multiple: true}}, column, value, :eq), do: dynamic([q], fragment("jsonb_exists(?, ?)", ^column, ^value))
-  defp filter_query_by_operator(parameter, column, value, :eq), do: dynamic([q], ^column == ^value)
+  defp get_nil_query(%{id: id} = _parameter, column, false, true),
+    do:
+      dynamic(
+        [q, ..., j],
+        fragment("? IS NULL AND (?.data \\? ?)", ^column, j, ^Atom.to_string(id))
+      )
+
+  defp get_nil_query(%{id: id} = _parameter, column, true, _joined),
+    do:
+      dynamic(
+        [q],
+        is_nil(^column)
+      )
+
+  defp filter_query_by_operator(%{data: %{multiple: true}}, column, value, :eq),
+    do: dynamic([q], fragment("jsonb_exists(?, ?)", ^column, ^value))
+
+  defp filter_query_by_operator(parameter, column, value, :eq),
+    do: dynamic([q], ^column == ^value)
 
   defp filter_query_by_operator(parameter, column, value, :contains),
     do: dynamic([q], like(^column, fragment("?", ^("%" <> value <> "%"))))
@@ -492,11 +727,18 @@ defmodule ArkePostgres.Query do
   defp filter_query_by_operator(parameter, column, value, :istartswith),
     do: dynamic([q], ilike(^column, fragment("?", ^(value <> "%"))))
 
-  defp filter_query_by_operator(parameter, column, value, :lte), do: dynamic([q], ^column <= ^value)
+  defp filter_query_by_operator(parameter, column, value, :lte),
+    do: dynamic([q], ^column <= ^value)
+
   defp filter_query_by_operator(parameter, column, value, :lt), do: dynamic([q], ^column < ^value)
   defp filter_query_by_operator(parameter, column, value, :gt), do: dynamic([q], ^column > ^value)
-  defp filter_query_by_operator(parameter, column, value, :gte), do: dynamic([q], ^column >= ^value)
-  defp filter_query_by_operator(parameter, column, value, :in), do: dynamic([q], ^column in ^value)
+
+  defp filter_query_by_operator(parameter, column, value, :gte),
+    do: dynamic([q], ^column >= ^value)
+
+  defp filter_query_by_operator(parameter, column, value, :in),
+    do: dynamic([q], ^column in ^value)
+
   defp filter_query_by_operator(parameter, column, value, _), do: dynamic([q], ^column == ^value)
 
   # defp filter_query_by_operator(query, key, value, "between"), do: from q in query, where: column_table(q, ^key) == ^value
@@ -532,7 +774,9 @@ defmodule ArkePostgres.Query do
     where_field = get_where_field_by_direction(direction) |> get_where_condition_by_type(type)
     get_link_query(action, project, unit_id, link_field, tree_field, depth, where_field)
   end
-  def get_nodes(project, action, unit_id, depth, direction, type), do:  get_nodes(project, action, [unit_id], depth, direction, type)
+
+  def get_nodes(project, action, unit_id, depth, direction, type),
+    do: get_nodes(project, action, [unit_id], depth, direction, type)
 
   defp get_project(project) when is_atom(project), do: Atom.to_string(project)
   defp get_project(project), do: project
@@ -578,40 +822,43 @@ defmodule ArkePostgres.Query do
   end
 
   defp get_link_query(_action, project, unit_id_list, link_field, tree_field, depth, where_field) do
-    q = from(r in from(a in "arke_unit",
-      left_join:
-        cte in fragment(
-          @raw_cte_query,
-          literal(^link_field),
-          literal(^project),
-          literal(^link_field),
-          ^unit_id_list,
-          literal(^project),
-          literal(^project),
-          literal(^project),
-          literal(^project),
-          literal(^project),
-          literal(^project),
-          literal(^link_field),
-          literal(^tree_field),
-          ^depth
-        ),
-      where: ^where_field,
-      distinct: [a.id, cte.starting_unit],
-      select: %{
-        id: a.id,
-        arke_id: a.arke_id,
-        data: a.data,
-        metadata: a.metadata,
-        inserted_at: a.inserted_at,
-        updated_at: a.updated_at,
-        depth: cte.depth,
-        link_metadata: cte.metadata,
-        link_type: cte.type,
-        starting_unit: cte.starting_unit
-      }
-    ))
-    from x in subquery(q), select: x
-  end
+    q =
+      from(
+        r in from(a in "arke_unit",
+          left_join:
+            cte in fragment(
+              @raw_cte_query,
+              literal(^link_field),
+              literal(^project),
+              literal(^link_field),
+              ^unit_id_list,
+              literal(^project),
+              literal(^project),
+              literal(^project),
+              literal(^project),
+              literal(^project),
+              literal(^project),
+              literal(^link_field),
+              literal(^tree_field),
+              ^depth
+            ),
+          where: ^where_field,
+          distinct: [a.id, cte.starting_unit],
+          select: %{
+            id: a.id,
+            arke_id: a.arke_id,
+            data: a.data,
+            metadata: a.metadata,
+            inserted_at: a.inserted_at,
+            updated_at: a.updated_at,
+            depth: cte.depth,
+            link_metadata: cte.metadata,
+            link_type: cte.type,
+            starting_unit: cte.starting_unit
+          }
+        )
+      )
 
+    from(x in subquery(q), select: x)
+  end
 end
