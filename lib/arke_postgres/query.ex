@@ -394,7 +394,7 @@ defmodule ArkePostgres.Query do
 
   defp handle_clause(_, clause, _), do: clause
 
-  defp parameter_condition(clause, parameter, value, operator, negate, logic, joined \\ nil) do
+  defp parameter_condition(clause, parameter, value, operator, negate, logic, joined \\ false) do
     column = get_column(parameter, joined)
     value = get_value(parameter, value)
 
