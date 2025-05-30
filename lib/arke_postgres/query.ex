@@ -400,7 +400,7 @@ defmodule ArkePostgres.Query do
 
     condition =
       if is_nil(value) or operator == :isnull do
-        get_nil_query(parameter, column, joined)
+        get_nil_query(parameter, column, negate, joined)
       else
         filter_query_by_operator(parameter, column, value, operator)
       end
@@ -681,18 +681,25 @@ defmodule ArkePostgres.Query do
     end
   end
 
-  defp get_nil_query(%{id: id} = _parameter, column, true),
+  defp get_nil_query(%{id: id} = _parameter, column, false, false),
+    do:
+      dynamic(
+        [q],
+        fragment("? IS NULL AND (?.data \\? ?)", ^column, q, ^Atom.to_string(id))
+      )
+
+  defp get_nil_query(%{id: id} = _parameter, column, false, true),
     do:
       dynamic(
         [q, ..., j],
         fragment("? IS NULL AND (?.data \\? ?)", ^column, j, ^Atom.to_string(id))
       )
 
-  defp get_nil_query(%{id: id} = _parameter, column, _joined),
+  defp get_nil_query(%{id: id} = _parameter, column, true, _joined),
     do:
       dynamic(
         [q],
-        fragment("? IS NULL AND (?.data \\? ?)", ^column, q, ^Atom.to_string(id))
+        is_nil(^column)
       )
 
   defp filter_query_by_operator(%{data: %{multiple: true}}, column, value, :eq),
