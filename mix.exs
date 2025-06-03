@@ -31,6 +31,7 @@ defmodule ArkePostgres.MixProject do
       mod: {ArkePostgres.Application, []}
     ]
   end
+
   defp versioning do
     [
       tag_prefix: "v",
@@ -49,7 +50,7 @@ defmodule ArkePostgres.MixProject do
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.10", only: :test},
-      {:arke, "~> 0.3.2"}
+      {:arke, "~> 0.4.0"}
     ])
   end
 
