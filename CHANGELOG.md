@@ -5,7 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0-rc.0] - 2026-08-12
+
+### Breaking changes
+- Arke is now required at ~> `0.9.0-rc`, which removes the pre-0.9 hook callbacks; `Table.insert/3`, `Table.update/4`, `ArkeUnit.update/3` and `ArkeUnit.update_key/3` now return `{:ok, _}` or `{:error, _}` instead of Ecto's `{count, nil}`; writes that used to fail silently now surface errors, so `create/2` returns `{:error, _}` when no row is inserted and `update/2` and `update_key/2` return `{:error, _}` against a missing row or an unsupported arke type instead of raising. by @ilyichv in [#76](https://github.com/arkemis/arke-postgres/pull/76)
+
+
+### Changed
+- Transaction seam, row locking and constraint translation by @ilyichv in [#76](https://github.com/arkemis/arke-postgres/pull/76)
+- Run on maintenance branches by @ilyichv
+
 ## [0.7.0] - 2026-08-04
+
+### Breaking changes
+- The `ArkePostgres.ArkeLink`, `ArkePostgres.Tables.ArkeField`,
+  `ArkePostgres.Tables.ArkeSchema` and `ArkePostgres.Tables.ArkeSchemaField` Ecto schemas are
+  gone. `ArkeLink.changeset/1` raised on  every call. Host apps that name these modules will now fail to compile; links    go through `ArkePostgres.Query` and `Arke.LinkManager` instead, and `ArkePostgres.Tables.ArkeUnit` is
+  unchanged. by @ErikFerrari in [#74](https://github.com/arkemis/arke-postgres/pull/74)
+- The minimum supported Elixir is now 1.16. by @ilyichv in [#69](https://github.com/arkemis/arke-postgres/pull/69)
+
 
 ### Changed
 - Drop unused ecto schemas by @ErikFerrari in [#74](https://github.com/arkemis/arke-postgres/pull/74)
@@ -22,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-08-03
 
+
 ### Added
 - Add a test suite covering the persistence adapter by @ilyichv in [#67](https://github.com/arkemis/arke-postgres/pull/67)
 
@@ -32,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump credo from 1.7.0 to 1.7.18 by @dependabot[bot] in [#57](https://github.com/arkemis/arke-postgres/pull/57)
 
 ## [0.5.1] - 2026-07-30
+
 
 ### Changed
 - Usage rules by @ilyichv in [#65](https://github.com/arkemis/arke-postgres/pull/65)
@@ -47,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - 2026-04-14
 
+
 ### Added
 - Add git cliff by @ilyichv
 
@@ -57,10 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.1] - 2025-09-08
 
+
 ### Fixed
 - Nested filters and order by @ilyichv in [#50](https://github.com/arkemis/arke-postgres/pull/50)
 
 ## [0.4.0] - 2025-06-03
+
 
 ### Added
 - Add nested filters and order by @ilyichv in [#49](https://github.com/arkemis/arke-postgres/pull/49)
@@ -70,10 +93,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.7] - 2024-09-11
 
+
 ### Changed
 - Print err by @ErikFerrari
 
 ## [0.3.6] - 2024-08-05
+
 
 ### Added
 - Add management for adding metadata in parameter and arke manager by @vittorio-reinaudo in [#42](https://github.com/arkemis/arke-postgres/pull/42)
@@ -83,10 +108,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.5] - 2024-07-10
 
+
 ### Fixed
 - Make handle_fiters public by @ErikFerrari in [#39](https://github.com/arkemis/arke-postgres/pull/39)
 
 ## [0.3.4] - 2024-07-02
+
 
 ### Added
 - Add distinct to query link by id and starting unit by @vittorio-reinaudo in [#38](https://github.com/arkemis/arke-postgres/pull/38)
@@ -96,10 +123,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.3] - 2024-05-22
 
+
 ### Fixed
 - Topology query distinct by @ErikFerrari in [#36](https://github.com/arkemis/arke-postgres/pull/36)
 
 ## [0.3.2] - 2024-05-21
+
 
 ### Changed
 - Use Arke utils for init by @ErikFerrari in [#34](https://github.com/arkemis/arke-postgres/pull/34)
@@ -107,10 +136,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1] - 2024-05-08
 
+
 ### Fixed
 - Link query multiple id by @ErikFerrari in [#33](https://github.com/arkemis/arke-postgres/pull/33)
 
 ## [0.3.0] - 2024-04-23
+
 
 ### Changed
 - Set version to v0.3.0 by @ErikFerrari
@@ -121,10 +152,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.11] - 2023-12-22
 
+
 ### Changed
 - Handled `?` operator for jsonb by @dorianmercatante
 
 ## [0.2.10] - 2023-12-11
+
 
 ### Changed
 - Set version to v0.2.10 by @ilyichv
@@ -134,6 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.9] - 2023-12-04
 
+
 ### Changed
 - Set version to v0.2.9 by @ilyichv
 
@@ -142,25 +176,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.8] - 2023-11-21
 
+
 ### Fixed
 - Fixed negate filters by @dorianmercatante
 
 ## [0.2.7] - 2023-10-17
+
 
 ### Removed
 - Removed refereces to ParamsManager by @dorianmercatante
 
 ## [0.2.6] - 2023-10-05
 
+
 ### Changed
 - Load remote arke modules by @dorianmercatante
 
 ## [0.2.5] - 2023-08-30
 
+
 ### Changed
 - Permission handler by @dorianmercatante
 
 ## [0.2.4] - 2023-07-11
+
 
 ### Changed
 - Set version to v0.2.4 by @ErikFerrari
@@ -176,6 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.3] - 2023-06-28
 
+
 ### Changed
 - Set version to v0.2.3 by @ilyichv
 
@@ -183,6 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Env test by @ErikFerrari in [#10](https://github.com/arkemis/arke-postgres/pull/10)
 
 ## [0.2.2] - 2023-06-19
+
 
 ### Changed
 - Set version to v0.2.2 by @ErikFerrari
@@ -192,6 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2023-06-15
 
+
 ### Changed
 - Set version to v0.2.1 by @ErikFerrari
 
@@ -199,6 +241,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Date, time and datetime query by @ErikFerrari in [#13](https://github.com/arkemis/arke-postgres/pull/13)
 
 ## [0.2.0] - 2023-06-15
+
 
 ### Changed
 - Set version to v0.2.0 by @ErikFerrari
@@ -208,6 +251,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.9] - 2023-06-14
 
+
 ### Changed
 - Handle parameter_manager improvements by @dorianmercatante
 
@@ -215,6 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * @dorianmercatante made their first contribution
 
 ## [0.1.8] - 2023-06-01
+
 
 ### Added
 - Add create project command by @ilyichv in [#7](https://github.com/arkemis/arke-postgres/pull/7)
@@ -224,6 +269,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.7] - 2023-05-31
 
+
 ### Added
 - Add arke_auth to ensure load by @ErikFerrari in [#6](https://github.com/arkemis/arke-postgres/pull/6)
 
@@ -231,6 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Set version to v0.1.7 by @ErikFerrari
 
 ## [0.1.6] - 2023-05-30
+
 
 ### Changed
 - Set version to 0.1.6 by @ilyichv
@@ -243,6 +290,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.5] - 2023-05-30
 
+
 ### Changed
 - Set version to v0.1.5 by @ErikFerrari
 
@@ -251,10 +299,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.4] - 2023-05-19
 
+
 ### Changed
 - Set version to v0.1.4 by @ErikFerrari
 
 ## [0.1.3] - 2023-05-19
+
 
 ### Added
 - Add release workflow by @ErikFerrari in [#2](https://github.com/arkemis/arke-postgres/pull/2)
@@ -269,6 +319,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### New Contributors
 * @ErikFerrari made their first contribution
 
+[0.8.0-rc.0]: https://github.com/arkemis/arke-postgres/compare/v0.7.0...v0.8.0-rc.0
 [0.7.0]: https://github.com/arkemis/arke-postgres/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/arkemis/arke-postgres/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/arkemis/arke-postgres/compare/v0.5.0...v0.5.1
