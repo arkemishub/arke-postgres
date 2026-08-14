@@ -224,6 +224,73 @@ defmodule ArkePostgres.QueryTest do
     end
   end
 
+  describe "get_manager_units/1 arke metadata" do
+    # Metadata is a jsonb column, so it comes back with string keys while every reader
+    # expects atoms: `Arke.QueryManager` decides whether to wrap a write in a transaction
+    # by looking up `:transaction`, and a stored `"transaction"` would leave that lookup on
+    # its default. `ArkePostgres.PersistenceTest` covers the write that follows.
+
+    test "atomizes the keys of an arke stored with the transaction disabled" do
+      create_arke(:query_meta_off, :query_meta_off_label, %{transaction: false})
+
+      metadata = arke_metadata(:query_meta_off)
+
+      assert metadata[:transaction] == false
+      refute Map.has_key?(metadata, "transaction")
+      # what `Arke.QueryManager` reads to opt the arke out
+      assert Map.get(metadata, :transaction, true) == false
+    end
+
+    test "atomizes every key and leaves the values alone" do
+      create_arke(:query_meta_keys, :query_meta_keys_label, %{
+        transaction: false,
+        custom_flag: "keep",
+        nested: %{"inner" => 1}
+      })
+
+      metadata = arke_metadata(:query_meta_keys)
+
+      assert Enum.all?(Map.keys(metadata), &is_atom(&1))
+      assert metadata[:custom_flag] == "keep"
+      # atomization is shallow: only the keys a reader looks up by atom are converted
+      assert metadata[:nested] == %{"inner" => 1}
+    end
+
+    test "an arke stored without the key keeps the default" do
+      create_arke(:query_meta_absent, :query_meta_absent_label)
+
+      metadata = arke_metadata(:query_meta_absent)
+
+      refute Map.has_key?(metadata, :transaction)
+      assert Map.get(metadata, :transaction, true) == true
+    end
+
+    test "an arke stored with the transaction enabled does not opt out" do
+      create_arke(:query_meta_on, :query_meta_on_label, %{transaction: true})
+
+      metadata = arke_metadata(:query_meta_on)
+
+      assert metadata[:transaction] == true
+      assert Map.get(metadata, :transaction, true) == true
+    end
+
+    test "only a boolean false opts out, the string does not" do
+      create_arke(:query_meta_string, :query_meta_string_label, %{transaction: "false"})
+
+      metadata = arke_metadata(:query_meta_string)
+
+      assert metadata[:transaction] == "false"
+      refute Map.get(metadata, :transaction, true) == false
+    end
+
+    defp arke_metadata(id) do
+      {_parameters, arke_list, _groups} = ArkePostgres.Query.get_manager_units(@project)
+
+      assert parsed = Enum.find(arke_list, &(to_string(&1.id) == to_string(id)))
+      parsed[:metadata]
+    end
+  end
+
   describe "link queries over the recursive cte" do
     setup do
       arke = create_arke(:query_link_arke, :query_link_label)

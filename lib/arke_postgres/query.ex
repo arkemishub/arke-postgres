@@ -155,12 +155,20 @@ defmodule ArkePostgres.Query do
           Map.put(acc, String.to_atom(k), db_data["value"])
         end)
         |> Map.put(:id, id)
-        |> Map.put(:metadata, metadata)
+        |> Map.put(:metadata, atomize_keys(metadata))
         |> Map.update(:parameters, [], fn current -> params ++ current end)
 
       [updated_data | new_arke_list]
     end)
   end
+
+  defp atomize_keys(metadata) when is_map(metadata),
+    do: Map.new(metadata, fn {key, value} -> {to_atom(key), value} end)
+
+  defp atomize_keys(metadata), do: metadata
+
+  defp to_atom(key) when is_binary(key), do: String.to_atom(key)
+  defp to_atom(key), do: key
 
   defp parse_parameters(parameter_list, project_id) do
     Enum.reduce(parameter_list, [], fn %{id: id, arke_id: arke_id, metadata: metadata} = unit,
