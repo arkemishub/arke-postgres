@@ -46,13 +46,20 @@ defmodule ArkePostgres.RepoCase do
   A parameter has to be created inside the project and linked: the system parameters
   live in `:arke_system` and `LinkManager.add_node/4` resolves both ends within a single
   project.
+
+  `metadata` is written to the arke row as given, on top of the project key every unit
+  carries, for the arke-level flags that are read back from the database.
   """
-  def create_arke(id, parameter_id) do
+  def create_arke(id, parameter_id, metadata \\ %{}) do
     arke_model = ArkeManager.get(:arke, :arke_system)
     string = ArkeManager.get(:string, :arke_system)
 
     {:ok, _} =
-      QueryManager.create(:test_schema, arke_model, %{id: to_string(id), label: "Fixture #{id}"})
+      QueryManager.create(:test_schema, arke_model, %{
+        id: to_string(id),
+        label: "Fixture #{id}",
+        metadata: Map.put(metadata, :project, :test_schema)
+      })
 
     {:ok, _} =
       QueryManager.create(:test_schema, string, %{

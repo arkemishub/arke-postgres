@@ -146,6 +146,36 @@ defmodule ArkePostgres.PersistenceTest do
       assert sql =~ "FOR UPDATE"
     end
 
+    test "an arke reloaded with transaction: false writes without opening a transaction" do
+      create_arke(:persistence_txn_off, :persistence_txn_off_label, %{transaction: false})
+      arke = reload_manager(:persistence_txn_off)
+
+      assert arke.metadata[:transaction] == false
+
+      statements =
+        transaction_statements(fn ->
+          {:ok, _} = QueryManager.create(@project, arke, %{id: "persistence_txn_off_unit"})
+        end)
+
+      assert statements == []
+      assert QueryManager.get_by(id: :persistence_txn_off_unit, project: @project) != nil
+    end
+
+    test "an arke reloaded without the key writes inside a transaction" do
+      create_arke(:persistence_txn_on, :persistence_txn_on_label)
+      arke = reload_manager(:persistence_txn_on)
+
+      refute Map.has_key?(arke.metadata, :transaction)
+
+      statements =
+        transaction_statements(fn ->
+          {:ok, _} = QueryManager.create(@project, arke, %{id: "persistence_txn_on_unit"})
+        end)
+
+      refute statements == []
+      assert QueryManager.get_by(id: :persistence_txn_on_unit, project: @project) != nil
+    end
+
     test "a nested transaction joins the outer one", %{arke: arke} do
       assert {:error, :inner} =
                ArkePostgres.transaction(fn ->
@@ -165,4 +195,52 @@ defmodule ArkePostgres.PersistenceTest do
   defp unit_for(arke, id, label \\ "before") do
     Arke.Core.Unit.load(arke, id: id, persistence_label: label)
   end
+
+  # Registers the arke in the manager from what the database holds, the way
+  # `ArkePostgres.init/0` does on boot: the metadata an arke carries in memory already has
+  # atom keys, only the reloaded one goes through the jsonb round trip.
+  defp reload_manager(id) do
+    {_parameters, arke_list, _groups} = ArkePostgres.Query.get_manager_units(@project)
+
+    assert parsed = Enum.find(arke_list, &(to_string(&1.id) == to_string(id)))
+    assert Arke.handle_manager([parsed], @project, :arke) == []
+
+    ArkeManager.get(id, @project)
+  end
+
+  # The transaction is observed through the repo telemetry rather than through the arke
+  # internals: a regular write is bracketed by `begin`/`commit`, an opted-out one is not.
+  @transaction_control ~r/^(begin|commit|rollback|savepoint|release savepoint|rollback to)/i
+
+  defp transaction_statements(fun) do
+    ref = make_ref()
+    handler_id = {__MODULE__, ref}
+
+    :telemetry.attach(
+      handler_id,
+      [:arke_postgres, :repo, :query],
+      &__MODULE__.relay_query/4,
+      {self(), ref}
+    )
+
+    try do
+      fun.()
+    after
+      :telemetry.detach(handler_id)
+    end
+
+    ref |> drain_queries([]) |> Enum.filter(&(&1 =~ @transaction_control))
+  end
+
+  defp drain_queries(ref, acc) do
+    receive do
+      {^ref, query} -> drain_queries(ref, [query | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  # A named handler keeps telemetry from warning about a local function.
+  def relay_query(_event, _measurements, %{query: query}, {pid, ref}),
+    do: send(pid, {ref, query})
 end
